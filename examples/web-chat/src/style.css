@@ -1,0 +1,728 @@
+/*
+ * Token system, deliberately generic: this package ships no product of its own, so nothing here
+ * borrows a specific consumer's visual identity. A dark ink ground, two named accents (agent =
+ * the model's turn, user = the person's), and a monospace reserved for anything call-shaped,
+ * because tool calls and their arguments are literally code, not prose.
+ */
+:root {
+  --ink: #12141c;
+  --ink-raised: #1b1e29;
+  --paper: #edeef3;
+  --agent: #3fd6c2;
+  --user: #ff8b5e;
+  --mute: #8b8fa8;
+  --alert: #ff5c6c;
+  --focus: #ffd166;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Several panels below set `display: flex` for their visible state, which otherwise beats the UA
+   stylesheet's `[hidden] { display: none }` on specificity alone. One rule, not one per panel. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 78rem;
+  margin: 0 auto;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand-mark {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--agent);
+  box-shadow: 0 0 0.5rem var(--agent);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.brand-sub {
+  color: var(--mute);
+  font-weight: 500;
+}
+
+.model-info {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--mute);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.toggle-debug {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--mute);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--paper) 20%, transparent);
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* The focus history: visible to everyone, not hidden behind a mouse-only tooltip. */
+.history {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--mute);
+}
+
+.unreachable {
+  margin: 1rem 1.25rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--alert);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--alert) 12%, var(--ink-raised));
+  font-size: 0.9rem;
+}
+
+.unreachable code {
+  background: var(--ink-raised);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.3rem;
+  font-family: ui-monospace, monospace;
+}
+
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* The state column: every window that exists, not just the focused one (so a wrong name can be
+   tried on purpose), plus the tool list, so "what can it do" never again requires reading the
+   system prompt to find out. */
+.state-col {
+  width: 16rem;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1rem;
+  overflow-y: auto;
+  border-right: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+  background: var(--ink-raised);
+  order: 1;
+}
+
+.state-section h2,
+.tools-section h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.window-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+}
+
+.window-list li {
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--mute) 8%, transparent);
+  border: 1px solid transparent;
+}
+
+.window-list .window-name {
+  display: block;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color: var(--paper);
+}
+
+.window-list .window-description {
+  display: block;
+  color: var(--mute);
+  font-size: 0.7rem;
+}
+
+/* The window currently focused: the one row that answers "where is it right now", among every
+   row that answers "where could it go". */
+.window-list li.focused {
+  background: color-mix(in srgb, var(--agent) 22%, transparent);
+  border-color: var(--agent);
+}
+
+.window-list li.focused .window-name {
+  color: var(--agent);
+  font-weight: 600;
+}
+
+.tool-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.tool-list li {
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--mute) 8%, transparent);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.tool-list .tool-name {
+  display: block;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color: var(--agent);
+}
+
+.tool-list .tool-description {
+  display: block;
+  color: var(--mute);
+  font-size: 0.72rem;
+}
+
+/* Flashed by `flashTool()` for a moment when the model actually calls this tool, so "what can it
+   do" (the static list) and "what did it just do" (this highlight) share one place to look. */
+.tool-list li.active {
+  background: color-mix(in srgb, var(--agent) 22%, transparent);
+  border-color: var(--agent);
+}
+
+.chat-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  order: 2;
+}
+
+/* The debug column: a raw, complete log next to the curated conversation, not instead of it.
+   Different audience, same event stream. */
+.debug-col {
+  width: 24rem;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+  background: var(--ink-raised);
+  order: 3;
+}
+
+.debug-header {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+}
+
+.debug-header h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.debug-tabs {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.debug-tabs button {
+  flex: 1;
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--paper) 16%, transparent);
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+}
+
+.debug-tabs button[aria-selected="true"] {
+  background: var(--agent);
+  border-color: var(--agent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.debug-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* The live context window: one row per message currently in `SlidingWindowReport.kept`, tagged
+   with the stable id `idFor()` assigns the first time a message is seen anywhere on this page. A
+   row lingers, struck through, for a moment after its message drops out (`renderContextWindow()`
+   in main.ts, `.dropping` removed by its own `setTimeout`): watching one disappear is the point,
+   not just knowing the final count. */
+.context-window {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+}
+
+.context-window h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.context-window-hint {
+  margin: 0 0 0.4rem;
+  font-size: 0.65rem;
+  color: var(--mute);
+}
+
+.context-window-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.context-window-list li {
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--mute) 8%, transparent);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  transition: opacity 0.6s ease;
+}
+
+/* Each row is a `<details>`: a glance by default (id, role, preview), the full message only once
+   opened. The native marker is replaced with one triangle glyph, styled the same in every browser,
+   so it reads as "click to open" rather than disappearing along with the native list-item box that
+   `display: flex` below would otherwise drop. */
+.context-window-list summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.context-window-list summary::-webkit-details-marker {
+  display: none;
+}
+
+.context-window-list summary::before {
+  content: "▸";
+  flex: none;
+  color: var(--mute);
+  transition: transform 0.15s ease;
+}
+
+.context-window-list details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.context-window-list .msg-id {
+  flex: none;
+  color: var(--mute);
+}
+
+.context-window-list .msg-role {
+  flex: none;
+  color: var(--agent);
+  text-transform: uppercase;
+  font-size: 0.62rem;
+}
+
+.context-window-list .msg-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--paper);
+}
+
+.context-window-list .msg-full {
+  margin: 0;
+  padding: 0 0.5rem 0.5rem 1.5rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--paper);
+  font-size: 0.68rem;
+}
+
+.context-window-list li.pinned {
+  border: 1px solid color-mix(in srgb, var(--focus) 45%, transparent);
+}
+
+.context-window-list li.dropping {
+  opacity: 0.35;
+}
+
+.context-window-list li.dropping .msg-preview {
+  text-decoration: line-through;
+}
+
+/* The raw report log: closed by default (`index.html`'s `<details>`, no `open` attribute), so the
+   simplified list above is what the panel opens on. Nothing here needs its own state: `<details>`
+   already is one. */
+.context-log-details {
+  border-top: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+}
+
+.context-log-details summary {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--mute);
+}
+
+.context-log-details[open] summary {
+  color: var(--paper);
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+}
+
+.context-log-details .debug-log {
+  max-height: 16rem;
+}
+
+.debug-log {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+}
+
+.debug-entry {
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.55rem;
+  background: color-mix(in srgb, var(--mute) 8%, transparent);
+}
+
+.debug-entry--summary {
+  border: 1px solid color-mix(in srgb, var(--agent) 40%, transparent);
+}
+
+.debug-entry--error {
+  border: 1px solid var(--alert);
+}
+
+.debug-label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.65rem;
+  color: var(--agent);
+  margin-bottom: 0.2rem;
+}
+
+.debug-entry pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--paper);
+}
+
+/* A placeholder row shown in any trace list before its first real entry: the empty state is
+   explained, not left to look like a panel that failed to wire up. Removed by `clearEmptyState()`
+   the moment a real entry lands. */
+.empty-state {
+  color: var(--mute);
+  font-style: italic;
+  padding: 0.4rem 0.1rem;
+}
+
+/* The Tools tab: one row per call, filled in with its response as soon as `logToolResult()` finds
+   it by `toolCallId`. Distinct from the state column's momentary `.active` flash: this row stays. */
+.tool-entry {
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  background: color-mix(in srgb, var(--mute) 8%, transparent);
+  border: 1px solid transparent;
+}
+
+.tool-entry-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tool-entry-name {
+  color: var(--agent);
+  font-weight: 700;
+}
+
+.tool-entry-args {
+  color: var(--mute);
+  word-break: break-word;
+}
+
+.tool-entry-result {
+  margin: 0.35rem 0 0;
+  color: var(--paper);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-entry-result--pending {
+  color: var(--mute);
+  font-style: italic;
+}
+
+@media (max-width: 55rem) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .debug-col {
+    width: auto;
+    max-height: 40vh;
+    border-left: none;
+    border-top: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+  }
+}
+
+.thread {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.msg {
+  display: flex;
+}
+
+.msg--user {
+  justify-content: flex-end;
+}
+
+.msg--assistant,
+.msg--system,
+.msg--error {
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 80%;
+  padding: 0.6rem 0.85rem;
+  border-radius: 1rem;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+}
+
+.msg--user .bubble {
+  background: var(--user);
+  color: var(--ink);
+  border-bottom-right-radius: 0.25rem;
+}
+
+.msg--assistant .bubble {
+  background: var(--ink-raised);
+  border: 1px solid color-mix(in srgb, var(--agent) 45%, transparent);
+  border-bottom-left-radius: 0.25rem;
+}
+
+.msg--system .bubble {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--paper) 25%, transparent);
+  color: var(--mute);
+  font-size: 0.85rem;
+}
+
+.msg--error .bubble {
+  background: color-mix(in srgb, var(--alert) 18%, var(--ink-raised));
+  border: 1px solid var(--alert);
+}
+
+/* Tool calls and their results: full-width, muted, monospace. Visually apart from the
+   conversation because they are the mechanism, not the dialogue, but never hidden or collapsed:
+   seeing every call in detail is the point of the demo. */
+.call {
+  align-self: stretch;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--mute) 10%, transparent);
+  font-size: 0.82rem;
+}
+
+.call-label {
+  flex: none;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.call code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color: var(--paper);
+  word-break: break-word;
+}
+
+/* A processing indicator: four bars pulsing out of phase, marking each model round-trip in
+   flight. That granularity, one pulse per `step()` call rather than one per request, is what
+   makes the loop's rhythm visible instead of just "loading". */
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  height: 1.4rem;
+  padding-left: 0.2rem;
+}
+
+.thinking span {
+  display: block;
+  width: 0.2rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--agent);
+  animation: pulse 0.9s ease-in-out infinite;
+}
+
+.thinking span:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.thinking span:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.thinking span:nth-child(4) {
+  animation-delay: 0.36s;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    height: 0.4rem;
+    opacity: 0.5;
+  }
+  50% {
+    height: 1.1rem;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking span {
+    animation: none;
+    height: 0.7rem;
+    opacity: 0.8;
+  }
+}
+
+.composer {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.9rem 1.25rem 1.15rem;
+  border-top: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);
+}
+
+.composer input {
+  flex: 1;
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--paper) 20%, transparent);
+  background: var(--ink-raised);
+  color: var(--paper);
+  font: inherit;
+}
+
+.composer input::placeholder {
+  color: var(--mute);
+}
+
+.composer button {
+  flex: none;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--agent);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.composer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

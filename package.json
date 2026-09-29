@@ -1,0 +1,48 @@
+{
+  "name": "@arthurolivierfortin/agent-core",
+  "version": "0.4.0-alpha",
+  "type": "module",
+  "description": "Cœur d'agent : définition, boucle à budget, outils, fournisseurs de modèles, harnais de scénarios. Copié le 2026-09-29 du package d'agents de NATHAN (auteur unique Arthur-Olivier Fortin).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./llm": {
+      "types": "./dist/llm/index.d.ts",
+      "default": "./dist/llm/index.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/infrastructure/index.d.ts",
+      "default": "./dist/tools/infrastructure/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arthurolivierfortin/agent-core.git"
+  },
+  "private": false
+}

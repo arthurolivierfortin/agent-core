@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>nathan-agent-core : chat demo</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <h1>nathan-agent-core <span class="brand-sub">demo</span></h1>
+        </div>
+        <p class="model-info" id="modelInfo"></p>
+        <button type="button" class="toggle-debug" id="toggleDebug">Hide traces</button>
+      </header>
+
+      <div class="unreachable" id="unreachable" hidden role="alert">
+        <p>No Ollama server is responding on <code id="unreachableHost"></code>.</p>
+        <ol>
+          <li>Install Ollama: <a href="https://ollama.com">ollama.com</a></li>
+          <li>Start the server: <code>ollama serve</code></li>
+          <li>Install the model: <code id="pullCommand"></code></li>
+        </ol>
+      </div>
+
+      <div class="layout">
+        <aside class="state-col" aria-label="Agent state and available tools">
+          <section class="state-section">
+            <h2>State</h2>
+            <ol class="window-list" id="windowList"></ol>
+            <p class="history" id="history"></p>
+          </section>
+          <section class="tools-section">
+            <h2>Tools</h2>
+            <ol class="tool-list" id="toolList"></ol>
+          </section>
+        </aside>
+
+        <div class="chat-col">
+          <ol class="thread" id="thread" aria-live="polite" aria-label="Conversation"></ol>
+
+          <form class="composer" id="chatForm">
+            <label class="sr-only" for="request">Your request</label>
+            <input id="request" name="request" type="text" autocomplete="off" placeholder="Type a request…" disabled />
+            <button type="submit" id="send" aria-label="Send" disabled>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path d="M3 11.5 20 4l-6.5 17-3-7.5L3 11.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </form>
+        </div>
+
+        <aside class="debug-col" id="debugCol" aria-label="Technical traces of the agent loop">
+          <div class="debug-header">
+            <h2>Traces</h2>
+            <div class="debug-tabs" role="tablist" aria-label="Trace section">
+              <button type="button" role="tab" id="tabAgent" aria-controls="panelAgent" aria-selected="true" data-tab="agent">Agent</button>
+              <button type="button" role="tab" id="tabContext" aria-controls="panelContext" aria-selected="false" data-tab="context">Context</button>
+              <button type="button" role="tab" id="tabTools" aria-controls="panelTools" aria-selected="false" data-tab="tools">Tools</button>
+            </div>
+          </div>
+
+          <ol class="debug-log" id="panelAgent" role="tabpanel" aria-labelledby="tabAgent" tabindex="0"></ol>
+
+          <div class="debug-panel" id="panelContext" role="tabpanel" aria-labelledby="tabContext" hidden>
+            <div class="context-window">
+              <h3>Context window, live</h3>
+              <p class="context-window-hint">Open a row for the full message.</p>
+              <ol class="context-window-list" id="contextWindowList"></ol>
+            </div>
+            <details class="context-log-details">
+              <summary>Detailed trace log</summary>
+              <ol class="debug-log" id="contextLog"></ol>
+            </details>
+          </div>
+
+          <ol class="debug-log" id="panelTools" role="tabpanel" aria-labelledby="tabTools" tabindex="0" hidden></ol>
+        </aside>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "noEmit": true,
+    // The demo is never compiled: Node runs the .ts files as they are, so the imports name them
+    // by their real extension. Inside the package, which is compiled, the extension is .js.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src"]
+}

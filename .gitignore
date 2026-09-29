@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.tgz
+
+.env
+.env.*
+!.env.example
+
+# réglages locaux à la machine, pas au projet
+.claude/settings.local.json
+
+# spec de travail, non versionnée (décision de l'équipe)
+/docs/specs
+
+# plans de travail, non versionnés : documents locaux (comme les specs) ;
+# ce qui doit survivre vit dans les ADRs et le code
+/docs/plans
+
+# scratch local : lecture des tâches JIRA via le package (contient un .env copié)
+_jira-scratch/
+
+# artefacts de session laissés par un pilotage navigateur (Playwright MCP)
+.playwright-mcp/
