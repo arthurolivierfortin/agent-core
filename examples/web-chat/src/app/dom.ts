@@ -2,7 +2,7 @@
  * APP SIDE: the handful of DOM helpers every component here uses.
  *
  * Nothing in this file, or anywhere else under `app/`, imports a value from
- * `@a-world-felt/nathan-agent-core`.
+ * `@arthurolivierfortin/agent-core`.
  */
 
 /** The element the markup promises. Missing means `index.html` and a component disagree. */

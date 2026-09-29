@@ -6,7 +6,7 @@
  * Three questions, three files; this one owns only what they share, the tab strip and the
  * show/hide toggle.
  */
-import type { Message, SlidingWindowReport } from "@a-world-felt/nathan-agent-core";
+import type { Message, SlidingWindowReport } from "@arthurolivierfortin/agent-core";
 import { byId } from "../../dom.ts";
 import { createAgentTab } from "./agent-tab.ts";
 import { createContextTab } from "./context-tab.ts";

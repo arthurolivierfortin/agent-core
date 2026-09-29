@@ -13,7 +13,7 @@
  *
  * The `Message` import is a type: this reads the calls the model made, it never makes one.
  */
-import type { Message, ToolCall } from "@a-world-felt/nathan-agent-core";
+import type { Message, ToolCall } from "@arthurolivierfortin/agent-core";
 import { appendAndScroll, byId, clearEmptyState, showEmptyState } from "../../dom.ts";
 
 const NO_TOOL_CALLS_YET = "No tool calls yet. Send a request that needs one to see it here.";

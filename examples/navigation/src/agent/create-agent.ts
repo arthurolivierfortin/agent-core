@@ -1,5 +1,5 @@
 /**
- * PACKAGE SIDE: everything this demo uses from `@a-world-felt/nathan-agent-core` to build an
+ * PACKAGE SIDE: everything this demo uses from `@arthurolivierfortin/agent-core` to build an
  * agent, in one file.
  *
  * Read this to see what wiring the package actually asks for: an agent definition, a provider, a
@@ -16,7 +16,7 @@ import {
   OllamaLLMProvider,
   SlidingWindowStrategy,
   type Tool,
-} from "@a-world-felt/nathan-agent-core";
+} from "@arthurolivierfortin/agent-core";
 
 /** The agent's system prompt: no product of this package's own, so nothing here is domain-specific. */
 export const PROMPT = [

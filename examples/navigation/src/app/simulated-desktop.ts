@@ -1,4 +1,4 @@
-import type { Tool } from "@a-world-felt/nathan-agent-core";
+import type { Tool } from "@arthurolivierfortin/agent-core";
 
 /**
  * APP SIDE: a simulated desktop application, and the tools that are the agent's only way into it.

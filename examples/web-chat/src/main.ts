@@ -1,5 +1,5 @@
 /**
- * A demo of `@a-world-felt/nathan-agent-core`, consumed exactly as a real project consumes it:
+ * A demo of `@arthurolivierfortin/agent-core`, consumed exactly as a real project consumes it:
  * through the package's public entry point, never through a relative path into its `dist/`.
  *
  * Same agent and simulated application as `examples/navigation`, driven from a chat thread instead
@@ -10,7 +10,7 @@
  * visible from the file tree alone:
  *
  * - `agent/` is the package side: the only code that imports values from
- *   `@a-world-felt/nathan-agent-core` and instantiates them. Two files, and neither touches the DOM.
+ *   `@arthurolivierfortin/agent-core` and instantiates them. Two files, and neither touches the DOM.
  * - `app/` is this demo: a simulated application, its tools, and the components on screen. Its
  *   files import types from the package and never a value, so they have no runtime dependency on
  *   it at all.

@@ -7,7 +7,7 @@
  *
  * The `Message` and `Tool` imports are types only: this file draws a list, it never calls a tool.
  */
-import type { Message, Tool } from "@a-world-felt/nathan-agent-core";
+import type { Message, Tool } from "@arthurolivierfortin/agent-core";
 import { byId } from "../dom.ts";
 
 const FLASH_MS = 1200;

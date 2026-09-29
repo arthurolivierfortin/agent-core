@@ -18,7 +18,7 @@ import type {
   AgentState,
   Message,
   StopReason,
-} from "@a-world-felt/nathan-agent-core";
+} from "@arthurolivierfortin/agent-core";
 import { PROMPT } from "./create-agent.ts";
 
 /**

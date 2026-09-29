@@ -5,7 +5,7 @@
  * `step()` (ADR-AGENT-0003). Driving it by hand is what makes the trace readable: the caller gets
  * a turn between two model calls, which is where this demo prints what just happened.
  */
-import { LLMError, type AgenticLLM, type AgentState } from "@a-world-felt/nathan-agent-core";
+import { LLMError, type AgenticLLM, type AgentState } from "@arthurolivierfortin/agent-core";
 
 /**
  * Called once per iteration, with the state that iteration produced and how long the history was

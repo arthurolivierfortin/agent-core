@@ -1,6 +1,6 @@
 # Claude Code Guidelines for nathan-agent-core
 
-`@a-world-felt/nathan-agent-core`: NATHAN's agentic LLM layer.
+`@arthurolivierfortin/agent-core`: NATHAN's agentic LLM layer.
 
 The package provides **three things**: the engine (LLM providers, tools, loop, memory), the agent definitions (prompt + tools), and an agent test harness. The consumer repo chooses its provider and brings its own tools.
 

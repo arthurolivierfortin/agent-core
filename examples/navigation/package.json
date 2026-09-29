@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@a-world-felt/nathan-agent-core": "file:../.."
+    "@arthurolivierfortin/agent-core": "file:../.."
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

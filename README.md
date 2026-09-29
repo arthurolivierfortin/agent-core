@@ -1,6 +1,6 @@
-> Copie, le 2026-09-29, du package d'agents de NATHAN (`@a-world-felt/nathan-agent-core` 0.4.0-alpha + harnais DEV-197), auteur unique Arthur-Olivier Fortin. Ce dépôt vit sous les conventions dev-kit ; l'original continue à l'université.
+> Copie, le 2026-09-29, du package d'agents de NATHAN (`@arthurolivierfortin/agent-core` 0.4.0-alpha + harnais DEV-197), auteur unique Arthur-Olivier Fortin. Ce dépôt vit sous les conventions dev-kit ; l'original continue à l'université.
 
-# @a-world-felt/nathan-agent-core
+# @arthurolivierfortin/agent-core
 
 > **Current version: 0.4.0-alpha** (prerelease). The public API is not frozen yet; the `.`, `./llm`, and `./testing` entry points ship (`./tools` is still coming). See [ROADMAP.md](./ROADMAP.md).
 
@@ -25,13 +25,13 @@ The package is published to the organization's **GitHub Packages registry** unde
 ```
 
 ```bash
-npm i @a-world-felt/nathan-agent-core@^0.4.0-alpha
+npm i @arthurolivierfortin/agent-core@^0.4.0-alpha
 ```
 
 ```json
 {
   "dependencies": {
-    "@a-world-felt/nathan-agent-core": "^0.4.0-alpha"
+    "@arthurolivierfortin/agent-core": "^0.4.0-alpha"
   }
 }
 ```
@@ -119,7 +119,7 @@ No disk access reaches `.`, so it stays importable everywhere (`ADR-AGENT-0002`)
 ### Minimal example
 
 ```ts
-import { LLMError, type Message, type ToolSchema } from "@a-world-felt/nathan-agent-core";
+import { LLMError, type Message, type ToolSchema } from "@arthurolivierfortin/agent-core";
 
 // A conversation message, as sent to the model.
 const salut: Message = { role: "user", content: "amène-moi aux réglages" };
@@ -149,7 +149,7 @@ import {
   AgenticLLM, defineAgent, OllamaLLMProvider,
   SlidingWindowStrategy, HeuristicTokenCounter,
   type Tool,
-} from "@a-world-felt/nathan-agent-core";
+} from "@arthurolivierfortin/agent-core";
 
 // A tool returns an outcome; it never throws, and it does not know which call it answers.
 const navigate: Tool = {
@@ -234,7 +234,7 @@ The `./llm` subpath ships the LLM layer: the `LLMProvider` port, the `OllamaLLMP
 ### Quick start
 
 ```ts
-import { OllamaLLMProvider, type Message } from "@a-world-felt/nathan-agent-core/llm";
+import { OllamaLLMProvider, type Message } from "@arthurolivierfortin/agent-core/llm";
 
 // A provider is a vendor: it offers several models, and you name one per call.
 const provider = new OllamaLLMProvider({
@@ -272,7 +272,7 @@ Whether a model can call tools is declared per model, on `supportsTools`, becaus
 For **env-driven** selection, the registry maps a typed provider id to a factory (a string key must be typed, no untyped lookup):
 
 ```ts
-import { PROVIDERS, resolveProvider } from "@a-world-felt/nathan-agent-core/llm";
+import { PROVIDERS, resolveProvider } from "@arthurolivierfortin/agent-core/llm";
 
 // Direct, typed access to a known provider:
 const a = PROVIDERS.ollama(); // declares the single model named by OLLAMA_MODEL
@@ -288,7 +288,7 @@ const b = resolveProvider(process.env.LLM_PROVIDER ?? "ollama");
 Bringing your own provider? `./testing` ships a **runner-agnostic** conformance check: it runs the port's happy path and returns a report. It never throws on a failed check and never couples to a test runner: you assert on the result with whatever you use.
 
 ```ts
-import { checkProviderContract } from "@a-world-felt/nathan-agent-core/testing";
+import { checkProviderContract } from "@arthurolivierfortin/agent-core/testing";
 
 const report = await checkProviderContract(provider);
 if (!report.ok) console.error(report.checks.filter((c) => !c.ok));

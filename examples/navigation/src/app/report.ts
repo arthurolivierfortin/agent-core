@@ -8,7 +8,7 @@
  * Swap these functions for a UI and the agent wiring in `agent/` does not change one character:
  * `examples/web-chat` is that same swap, done for real.
  */
-import type { AgentState, Message } from "@a-world-felt/nathan-agent-core";
+import type { AgentState, Message } from "@arthurolivierfortin/agent-core";
 import type { DesktopState } from "./simulated-desktop.ts";
 
 export type RunHeader = {

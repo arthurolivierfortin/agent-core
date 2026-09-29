@@ -1,5 +1,5 @@
 /**
- * A demo of `@a-world-felt/nathan-agent-core`, consumed exactly as a real project consumes it:
+ * A demo of `@arthurolivierfortin/agent-core`, consumed exactly as a real project consumes it:
  * through the package's public entry point, never through a relative path into its `dist/`.
  *
  * It gives an agent four tools over a simulated desktop, asks it to "focus the settings window",
@@ -10,7 +10,7 @@
  * visible from the file tree alone:
  *
  * - `agent/` is the package side: the only code that imports values from
- *   `@a-world-felt/nathan-agent-core` and instantiates them.
+ *   `@arthurolivierfortin/agent-core` and instantiates them.
  * - `app/` is this demo: a simulated application, its tools, and its output. It imports types from
  *   the package and never a value, so it has no runtime dependency on it at all.
  *

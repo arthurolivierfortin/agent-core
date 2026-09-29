@@ -7,7 +7,7 @@
  *
  * The `Message` import is a type: this file renders what the loop produced, it never drives it.
  */
-import type { Message } from "@a-world-felt/nathan-agent-core";
+import type { Message } from "@arthurolivierfortin/agent-core";
 import { appendAndScroll, byId } from "../dom.ts";
 
 export type Thread = {

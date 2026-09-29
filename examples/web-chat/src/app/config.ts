@@ -2,7 +2,7 @@
  * APP SIDE: what this demo reads from its own environment, and the two requests it ships with.
  *
  * The application loads its configuration, the library reads what it is handed: nothing in
- * `@a-world-felt/nathan-agent-core` looks at an environment variable on its own. These values
+ * `@arthurolivierfortin/agent-core` looks at an environment variable on its own. These values
  * reach the package as arguments to `createAgent`, and nowhere else.
  */
 

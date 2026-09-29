@@ -9,7 +9,7 @@ nothing about what any specific consumer builds with it (`ADR-AGENT-0018`). A de
 handful of windows demonstrates tool calls with visible, harmless side effects without describing
 anyone's real interface.
 
-It consumes `@a-world-felt/nathan-agent-core` the way a real project does, through the package's
+It consumes `@arthurolivierfortin/agent-core` the way a real project does, through the package's
 public entry point. The dependency is `file:../..`, so the import resolves through the real
 `exports` map rather than reaching into `dist/`. The package ships no UI component
 (`ADR-AGENT-0018`): this page wires `AgenticLLM` to the DOM by hand, the way any consumer would.
@@ -101,7 +101,7 @@ readable from the file tree alone:
 ```
 src/
   agent/                     PACKAGE SIDE: the only code that imports values from
-    create-agent.ts          @a-world-felt/nathan-agent-core and instantiates them.
+    create-agent.ts          @arthurolivierfortin/agent-core and instantiates them.
     conversation.ts          Neither file touches the DOM.
     index.ts                 the barrel main.ts imports from
   app/                       APP SIDE: no runtime dependency on the package.
@@ -167,8 +167,8 @@ stream is handed out raw rather than pre-split. Adding a fourth reader is one mo
 One line in `package.json`, once the package is on the registry:
 
 ```diff
--    "@a-world-felt/nathan-agent-core": "file:../.."
-+    "@a-world-felt/nathan-agent-core": "^0.4.0-alpha"
+-    "@arthurolivierfortin/agent-core": "file:../.."
++    "@arthurolivierfortin/agent-core": "^0.4.0-alpha"
 ```
 
 The registry needs authentication even for reads. See "Installation" in the

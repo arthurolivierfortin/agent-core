@@ -1,5 +1,5 @@
 /**
- * PACKAGE SIDE: everything this demo uses from `@a-world-felt/nathan-agent-core` to build an
+ * PACKAGE SIDE: everything this demo uses from `@arthurolivierfortin/agent-core` to build an
  * agent, in one file.
  *
  * Read this to see what wiring the package actually asks for: an agent definition, a provider, a
@@ -19,7 +19,7 @@ import {
   SlidingWindowStrategy,
   type SlidingWindowReport,
   type Tool,
-} from "@a-world-felt/nathan-agent-core";
+} from "@arthurolivierfortin/agent-core";
 
 /** Same prompt as `examples/navigation`. Deliberately generic: no product of this package's own. */
 export const PROMPT = [

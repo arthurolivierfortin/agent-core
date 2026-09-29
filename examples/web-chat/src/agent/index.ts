@@ -1,6 +1,6 @@
 /**
  * PACKAGE SIDE, the barrel: the demo's whole surface onto
- * `@a-world-felt/nathan-agent-core`.
+ * `@arthurolivierfortin/agent-core`.
  *
  * `main.ts` imports from here and from nowhere else in this folder, so the boundary is one import
  * statement wide.

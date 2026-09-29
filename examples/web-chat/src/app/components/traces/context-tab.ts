@@ -11,7 +11,7 @@
  *
  * The imports are types only: this reads a report, it never builds a context.
  */
-import type { Message, SlidingWindowReport } from "@a-world-felt/nathan-agent-core";
+import type { Message, SlidingWindowReport } from "@arthurolivierfortin/agent-core";
 import { byId, showEmptyState } from "../../dom.ts";
 import { appendLogEntry } from "./log-entry.ts";
 

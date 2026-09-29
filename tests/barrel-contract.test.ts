@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import * as root from "@a-world-felt/nathan-agent-core";
-import * as llm from "@a-world-felt/nathan-agent-core/llm";
-import * as tools from "@a-world-felt/nathan-agent-core/tools";
-import * as testing from "@a-world-felt/nathan-agent-core/testing";
+import * as root from "@arthurolivierfortin/agent-core";
+import * as llm from "@arthurolivierfortin/agent-core/llm";
+import * as tools from "@arthurolivierfortin/agent-core/tools";
+import * as testing from "@arthurolivierfortin/agent-core/testing";
 import type {
   AgentDefinition,
   AgentDeps,
@@ -21,7 +21,7 @@ import type {
   ToolDefinition,
   ToolOutcome,
   ToolResult,
-} from "@a-world-felt/nathan-agent-core";
+} from "@arthurolivierfortin/agent-core";
 
 test("`.` exposes the engine surface", () => {
   for (const name of ["LLMError", "OllamaLLMProvider", "PROVIDERS", "resolveProvider", "DEFAULT_OLLAMA_MODEL"]) {
