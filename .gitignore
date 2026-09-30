@@ -14,3 +14,6 @@ _jira-scratch/
 
 # artefacts de session laissés par un pilotage navigateur (Playwright MCP)
 .playwright-mcp/
+
+# worktrees des sessions de la boucle
+.claude/worktrees/
