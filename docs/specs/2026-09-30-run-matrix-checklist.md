@@ -23,8 +23,22 @@ Spécification : docs/specs/2026-09-30-run-matrix-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **H1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1, même pratique que #11.
+- [H] **H2** · Portées de commit : `feat(testing)` pour SPEC-2, SPEC-1, SPEC-3, SPEC-4, SPEC-5, SPEC-6 (sujets repris de la spécification), `chore(checklist)` pour le cochage des gates et l'inscription des hypothèses.
+- [H] **H3** · `runOne`, closure locale non exportée de `runMatrix`, porte un run (mesures, `try`, trace) ; elle s'ajoute aux fonctions non exportées nommées par la spécification (`combinationsOf`, `recordResponses`, `messageOf`). Aucun autre nom n'est exporté.
+- [H] **H4** · `recordResponses` type `complete(messages, opts)` par le contexte (type de retour `LLMProvider`) : `Message` et `CompletionOptions` ne sont pas importés (la spécification prévoit que le builder retire un type inutilisé).
+- [H] **H5** · Ordre des clés d'un `MatrixRun` construit par `{ ...outcome, combination, run, durationMs, tokensUsed, costUsd }` : `scenario`, `passed`, `failures`, `error`, `trace`, `combination`, `run`, `durationMs`, `tokensUsed`, `costUsd`, différent de l'ordre de déclaration du type. Aucun test n'en dépend ; #12 (`toJSON`) fixera l'ordre de sérialisation s'il en veut un.
+- [H] **H6** · TEST-1 valide le rejet par `assert.rejects(p, { name: "RangeError", message })` (nom et message exact), pas par `instanceof RangeError`.
+- [H] **H7** · Découpage des tests : TEST-2 en un cas (matrice de 16 runs, puis `axes: {}`), TEST-1 en un cas paramétré (cinq options), TEST-3 en trois (horloge injectée ; absents `null` et collecteur neuf ; horloge par défaut), TEST-4 en deux (trace nominale ; atterrissage), TEST-5 en deux (fournisseur qui rejette puis run suivant ; `deps` puis `env` qui lèvent), TEST-6 = deux cas étendus et un cas neuf. L'aide `matrix()` pose les valeurs par défaut (un scénario « aller aux reglages », `axes: {}`, `runs: 1`, script qui réussit), choisie pour la sobriété de taille.
+- [H] **H8** · Séquentialité (TEST-2) : `deps` enregistre `previous?.calls.length` à chaque appel et l'assertion est faite après `runMatrix`, pas dans `deps` (une assertion levée dans `deps` serait captée par le `try` de SPEC-5).
+- [H] **H9** · Horloge par défaut (TEST-3, consigne du pilote) : `Date.now` est remplacé par `t.mock.method(Date, "now", scriptedClock([100, 110, 150, 400]))` et la valeur `durationMs` 300 et `callCount()` 4 sont vérifiées ; `deps` passe `now: () => 0` à la boucle pour que `initialState` ne lise pas `Date.now`.
+- [H] **H10** · Le commentaire de `MatrixTrace.finalState` (« Null … when the run threw ») entre avec SPEC-4, qui déclare le type nullable (checklist) ; le chemin qui produit `null` arrive avec SPEC-5.
+- [H] **H11** · Style compact retenu pour tenir sous 400 lignes : corps de bloc sur une ligne (`() => { calls.env++; return app(); }` dans les tests, `const env = () => { captured = scenario.env(); return captured; };` dans le code), `if` de garde sur une ligne pour `scenarios` et pour un axe vide, lignes de test jusqu'à environ 125 caractères (le dépôt n'a pas de formateur ; `barrel-contract.test.ts` a déjà des lignes de plus de 100 caractères).
+- [H] **H12** · Rédaction des commentaires de conception (anglais, le pourquoi), des noms de tests, des noms de scénarios (« aller aux reglages », « aller au profil », « rester a l'accueil »), des entrées et des prompts choisie par ce plan dans le cadre fixé par la spécification.
+- [H] **H13** · Les rouges et verts des tâches 1 à 6 se constatent fichier par fichier (`node --test <fichier>` après `npm run build`) ; la suite complète ne tourne qu'aux tâches 0 et 7.
+- [H] **H14** · La PR porte `Closes #8` : le découpage confie `summary` et `toJSON` (le « rapport JSON » du titre de #8) à #12. Si le pilote veut garder #8 ouverte jusqu'à #12, il remplace par `Refs: #8`.
