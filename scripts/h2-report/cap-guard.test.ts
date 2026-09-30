@@ -243,3 +243,15 @@ test("TEST-1 (issue 39) a cost of 0 is known: added to spentUsd, without a cut",
   assert.equal(await guard.complete(HI, OPTS), PRICED_RESPONSE);
   assert.deepEqual([double.count(), guard.spentUsd(), guard.refused()], [3, 1, 0]);
 });
+
+test("TEST-3 (issue 39) a status of 600, above the HTTP range, cuts the matrix as unclassified", async () => {
+  const error = new LLMError("API_ERROR", "above range", { status: 600 });
+  const double = scripted([PRICED, { error }]);
+  const guard = capGuard(double.provider, RATES, 10);
+  await guard.complete(HI, OPTS);
+  await assert.rejects(guard.complete(HI, OPTS), (thrown) => thrown === error);
+  assert.deepEqual([guard.cutReason(), guard.spentUsd(), guard.refused()], ["unclassified", 0.5, 0]);
+  await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unclassified") });
+  assert.equal(double.count(), 2);
+  assert.equal(guard.refused(), 1);
+});
