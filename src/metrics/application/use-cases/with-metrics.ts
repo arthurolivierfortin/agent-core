@@ -16,6 +16,11 @@ import type { MetricsCollector } from "./metrics-collector.js";
  * `now` defaults to `Date.now`, which is not monotonic: a system clock change during a call
  * skews its duration, and no bound hides it. Pass `() => performance.now()` for a monotonic one.
  *
+ * A call that fails records nothing. When `provider.complete` rejects, the `await` below rethrows
+ * the very same error, neither wrapped nor converted, and `collector.record` is never reached: no
+ * `finally` records the call, no `catch` replaces its error. A `UsageRecord` cannot tell a failed
+ * call from a resolved one, so counting it would skew both `calls` and `durationMs`.
+ *
  * Design: docs/specs/2026-09-30-with-metrics-design.md (#11).
  */
 export function withMetrics(
