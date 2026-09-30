@@ -4,11 +4,14 @@ import type { RateTable } from "../../dist/index.js";
 import type { ReportArgs } from "./report-args.ts";
 
 const PRICE_FIELDS = ["usdPerMillionTokensIn", "usdPerMillionTokensOut"] as const;
+// GeminiLLMProvider's default key variable, which the package does not export. Only its name is ever written.
+const GEMINI_API_KEY_VAR = "GEMINI_API_KEY";
 
 /**
  * Throws one Error listing, a line each, what keeps the report from starting: a model without an
  * own entry in the rate table, or a hosted rate that is null or has a price <= 0 whatever its
  * source (rule R2). The local model's rate may be null or 0. Returns when nothing is missing.
+ * An unset or blank GEMINI_API_KEY in `env` adds a last line naming the variable, never its value.
  */
 export function assertReadyToStart(
   args: Pick<ReportArgs, "ollamaModel" | "geminiModel">,
@@ -30,6 +33,9 @@ export function assertReadyToStart(
     if (hosted && hosted[field] <= 0) {
       defects.push(`data/rates.json: '${args.geminiModel}'.rate.${field} must be > 0 for the hosted model`);
     }
+  }
+  if ((env[GEMINI_API_KEY_VAR] ?? "").trim() === "") {
+    defects.push(`environment variable ${GEMINI_API_KEY_VAR} is unset or empty`);
   }
   if (defects.length > 0) {
     throw new Error(`refusing to start before any network call:${defects.map((defect) => `\n- ${defect}`).join("")}`);

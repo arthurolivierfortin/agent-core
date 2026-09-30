@@ -54,3 +54,16 @@ test("TEST-8 (issue 20) a hosted price of 0 is refused even with source local (R
 test("TEST-8 (issue 20) a complete, positive table with a key lets the report start", () => {
   assert.equal(refusal(READY, KEY), undefined);
 });
+
+test("TEST-9 (issue 20) an unset, empty or blank GEMINI_API_KEY is refused by name, after the rate lines", () => {
+  const keyLine = "environment variable GEMINI_API_KEY is unset or empty";
+  for (const env of [{}, { GEMINI_API_KEY: "" }, { GEMINI_API_KEY: "   " }]) {
+    assert.equal(refusal(READY, env), `${PREFIX}\n- ${keyLine}`);
+  }
+  assert.equal(refusal(UNPRICED, {}), `${PREFIX}\n- ${NULL_RATE}\n- ${keyLine}`);
+});
+
+test("TEST-9 (issue 20) the key value never enters the message", () => {
+  const message = refusal(UNPRICED, KEY);
+  assert.ok(message !== undefined && !message.includes("sentinel-value-not-a-key"), message);
+});
