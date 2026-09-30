@@ -3,7 +3,9 @@
 // Transport errors (#25): docs/specs/2026-09-30-gemini-errors-design.md. No LLMError of this module
 // chains a cause, and an external string (body, exception) enters a message only with the key
 // redacted first, then as a bounded excerpt, so that a cut never leaves a prefix of the key (D3).
-// HTTP status (#34): docs/specs/2026-09-30-llm-error-status-design.md. Every LLMError of a non-ok response carries status, even when its body cannot be read; a network failure or an ok response carries none.
+// HTTP status (#34): docs/specs/2026-09-30-llm-error-status-design.md. Every LLMError of a non-ok
+// response carries status, even when its body cannot be read; a network failure or an ok response
+// carries none.
 // retryAfterMs comes from a Retry-After in delay-seconds form only (H9).
 // Served by ./llm and . through src/llm/providers/index.ts, which re-exports GeminiLLMProvider and GeminiConfig only.
 //
