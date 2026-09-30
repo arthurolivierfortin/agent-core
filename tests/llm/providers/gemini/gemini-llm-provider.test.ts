@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GeminiLLMProvider } from "../../../../dist/llm/providers/gemini/gemini-llm-provider.js";
 import { toGeminiRequest } from "../../../../dist/llm/providers/gemini/gemini-wire.js";
+import { checkProviderContract } from "../../../../dist/testing/index.js";
 
 // Every fetch in this file is a double: no network, no hosted provider. Key values are fake
 // (cle-factice-*), and process.env is only touched through withEnv, which restores it.
@@ -67,6 +68,16 @@ function capturingFetch(): { fetch: typeof fetch; calls: CapturedCall[] } {
     return new Response(JSON.stringify(ANSWER), { status: 200 });
   }) as unknown as typeof fetch;
   return { fetch: fetchFn, calls };
+}
+
+/** A fetch double that must never be called: it counts the call, then throws. */
+function unreachableFetch(): { fetch: typeof fetch; count: () => number } {
+  let calls = 0;
+  const fetchFn = (async () => {
+    calls++;
+    throw new Error("fetch must not be called");
+  }) as unknown as typeof fetch;
+  return { fetch: fetchFn, count: () => calls };
 }
 
 /** An expected LLMError with this code: its message matches every present pattern, no absent one. */
@@ -175,4 +186,41 @@ test("the default fetch (no config.fetch given) is the global one, bound to glob
     globalThis.fetch = original;
   }
   assert.equal(receiver, globalThis);
+});
+
+test("complete() refuses an undeclared model before reading the key or calling fetch", async () => {
+  const double = unreachableFetch();
+  const provider = new GeminiLLMProvider({
+    models: [
+      { id: "gemini-2.5-flash", supportsTools: true },
+      { id: "gemini-2.5-flash-lite", supportsTools: false },
+    ],
+    apiKeyVar: KEY_VAR,
+    fetch: double.fetch,
+  });
+  const call = () => provider.complete([{ role: "user", content: "hi" }], { model: "gemini-1.5-pro" });
+  await withEnv({ [KEY_VAR]: undefined }, async () => {
+    await assert.rejects(call, llmError("MODEL_NOT_FOUND", [/gemini-1\.5-pro/, /gemini-2\.5-flash, gemini-2\.5-flash-lite/]));
+  });
+  assert.equal(double.count(), 0);
+  await withEnv({ [KEY_VAR]: "cle-factice-ne-pas-afficher" }, async () => {
+    await assert.rejects(call, llmError("MODEL_NOT_FOUND", [], [/cle-factice-ne-pas-afficher/]));
+  });
+  assert.equal(double.count(), 0);
+});
+
+test("checkProviderContract passes on a fetch double, with no streaming check", async () => {
+  await withEnv({ [KEY_VAR]: "cle-factice-1" }, async () => {
+    const provider = new GeminiLLMProvider({ models: DECLARED, apiKeyVar: KEY_VAR, fetch: capturingFetch().fetch });
+    const report = await checkProviderContract(provider);
+    assert.equal(report.ok, true, JSON.stringify(report.checks));
+    assert.deepStrictEqual(
+      report.checks.filter((check) => /stream|chunk/.test(check.name)),
+      [],
+    );
+    assert.deepStrictEqual(
+      report.checks.find((check) => check.name === "complete() refuses a model the provider does not declare"),
+      { name: "complete() refuses a model the provider does not declare", ok: true },
+    );
+  });
 });

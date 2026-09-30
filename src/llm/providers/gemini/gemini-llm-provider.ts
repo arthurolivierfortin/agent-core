@@ -8,6 +8,7 @@
 // - H5: the API key travels in the x-goog-api-key header, never in the URL.
 //   Locked by "hypothesis H5: the API key travels in the x-goog-api-key header".
 
+import { LLMError } from "../../models/index.js";
 import type { LLMResponse, Message, ModelInfo } from "../../models/index.js";
 import type { CompletionOptions, LLMProvider } from "../../interfaces/index.js";
 import {
@@ -62,6 +63,7 @@ export class GeminiLLMProvider implements LLMProvider {
   }
 
   async complete(messages: Message[], opts: CompletionOptions): Promise<LLMResponse> {
+    this.assertDeclared(opts.model);
     // Read on every call and kept in a local, never in a field: a change of process.env between
     // two calls is honoured, and no serialization of the instance carries the key.
     const apiKey = process.env[this.apiKeyVar] ?? "";
@@ -72,5 +74,12 @@ export class GeminiLLMProvider implements LLMProvider {
       body: JSON.stringify(body),
     });
     return fromGeminiResponse((await res.json()) as GeminiResponse);
+  }
+
+  /** First of all: MODEL_NOT_FOUND whatever the environment holds, and never a network call. */
+  private assertDeclared(model: string): void {
+    if (this.declaredModels.some((declared) => declared.id === model)) return;
+    const offered = this.declaredModels.map((declared) => declared.id).join(", ");
+    throw new LLMError("MODEL_NOT_FOUND", `Model '${model}' is not declared on this provider. Declared: ${offered}`);
   }
 }
