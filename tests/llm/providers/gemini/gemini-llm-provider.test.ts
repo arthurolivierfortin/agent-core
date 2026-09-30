@@ -258,21 +258,26 @@ test("complete() refuses a missing key and names the configured variable, never 
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
-/** A fetch double that answers this status and body, and counts its calls. */
-function respondingFetch(status: number, body: string): { fetch: typeof fetch; count: () => number } {
+/** A fetch double that answers this status, body and headers, and counts its calls. */
+function respondingFetch(
+  status: number,
+  body: string,
+  headers?: Record<string, string>,
+): { fetch: typeof fetch; count: () => number } {
   let calls = 0;
   const fetchFn = (async () => {
     calls++;
-    return new Response(body, { status });
+    return new Response(body, { status, headers });
   }) as unknown as typeof fetch;
   return { fetch: fetchFn, count: () => calls };
 }
 
-/** A fetch double whose response has this status and a body that cannot be read: text() rejects. */
-function unreadableFetch(status: number, error: unknown): typeof fetch {
+/** A fetch double whose response has this status and headers, and a body that cannot be read: text() rejects. */
+function unreadableFetch(status: number, error: unknown, headers?: Record<string, string>): typeof fetch {
   const res = {
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers(headers),
     text: async () => {
       throw error;
     },
@@ -280,7 +285,7 @@ function unreadableFetch(status: number, error: unknown): typeof fetch {
   return (async () => res as unknown as Response) as unknown as typeof fetch;
 }
 
-type TransportError = Error & { code: string };
+type TransportError = Error & { code: string; status?: number; retryAfterMs?: number };
 
 /** complete() under this key, and this baseURL when given, rejects with an LLMError of exactly this code and message, returned. */
 async function expectFailure(fetchFn: typeof fetch, code: string, message: string, key = "cle-factice-1", baseURL?: string) {
@@ -501,3 +506,164 @@ for (const { title, fetch: fetchFn, baseURL, code, message } of REDACTION_CASES)
     assert.doesNotMatch(exposed(error), /cle-/);
   });
 }
+
+// HTTP status (#34). Every LLMError of a non-ok response carries status, even when its body cannot
+// be read; a rejected fetch, an ok response and a missing key carry none.
+
+const QUOTA_BODY = JSON.stringify({ error: { code: 429, message: "Quota exceeded.", status: "RESOURCE_EXHAUSTED" } });
+const QUOTA_MESSAGE = `Gemini 429 RESOURCE_EXHAUSTED from ${ENDPOINT}: Quota exceeded.`;
+const NOT_FOUND_TEXT = "models/gemini-2.5-flash is not found for API version v1beta, or is not supported for generateContent.";
+const NOT_FOUND_BODY = JSON.stringify({ error: { code: 404, message: NOT_FOUND_TEXT, status: "NOT_FOUND" } });
+const NOT_FOUND_MESSAGE = `Gemini has no model 'gemini-2.5-flash' (404 NOT_FOUND from ${ENDPOINT}): ${NOT_FOUND_TEXT}`;
+
+/** Neither field is an own property of the error: absent, not merely undefined (#34, D2). */
+function assertNoHttpFields(error: TransportError): void {
+  assert.equal(Object.hasOwn(error, "status"), false);
+  assert.equal(Object.hasOwn(error, "retryAfterMs"), false);
+}
+
+test("every LLMError of a non-ok response carries its status, 404 NOT_FOUND included", async () => {
+  const quota = await expectFailure(respondingFetch(429, QUOTA_BODY).fetch, "API_ERROR", QUOTA_MESSAGE);
+  assert.equal(quota.status, 429);
+  const noModel = await expectFailure(respondingFetch(404, NOT_FOUND_BODY).fetch, "MODEL_NOT_FOUND", NOT_FOUND_MESSAGE);
+  assert.equal(noModel.status, 404);
+  const wrongBase = await expectFailure(
+    respondingFetch(404, "<html>Not Found</html>").fetch,
+    "API_ERROR",
+    `Gemini 404 from ${ENDPOINT} (check baseURL: host root, without /v1beta): <html>Not Found</html>`,
+  );
+  assert.equal(wrongBase.status, 404);
+  const invalid = { error: { code: 400, message: "Invalid JSON payload received.", status: "INVALID_ARGUMENT" } };
+  const badRequest = await expectFailure(
+    respondingFetch(400, JSON.stringify(invalid)).fetch,
+    "API_ERROR",
+    `Gemini 400 INVALID_ARGUMENT from ${ENDPOINT}: Invalid JSON payload received.`,
+  );
+  assert.equal(badRequest.status, 400);
+  const empty = await expectFailure(
+    respondingFetch(503, "").fetch,
+    "API_ERROR",
+    `Gemini 503 from ${ENDPOINT}: (empty body)`,
+  );
+  assert.equal(empty.status, 503);
+});
+
+test("an error body that cannot be read keeps the status of its response", async () => {
+  for (const status of [429, 500]) {
+    const error = await expectFailure(
+      unreadableFetch(status, new Error("socket closed")),
+      "API_ERROR",
+      `Gemini ${status} response body could not be read: Error: socket closed`,
+    );
+    assert.equal(error.status, status);
+  }
+});
+
+test("a rejected fetch, an ok response and a missing key carry neither status nor retryAfterMs", async () => {
+  const failures = [
+    await expectFailure(
+      rejectingFetch(new TypeError("fetch failed")),
+      "API_ERROR",
+      `Gemini request to ${ENDPOINT} failed: TypeError: fetch failed`,
+    ),
+    await expectFailure(
+      unreadableFetch(200, new Error("socket closed")),
+      "API_ERROR",
+      "Gemini 200 response body could not be read: Error: socket closed",
+    ),
+    await expectFailure(respondingFetch(200, "not json").fetch, "API_ERROR", "Gemini 200 response is not JSON: not json"),
+    await expectFailure(
+      respondingFetch(200, JSON.stringify({ promptFeedback: { blockReason: "SAFETY" } })).fetch,
+      "API_ERROR",
+      "Gemini returned no candidate (promptFeedback.blockReason: SAFETY)",
+    ),
+    await expectFailure(
+      unreachableFetch().fetch,
+      "MISSING_API_KEY",
+      "Gemini API key missing: environment variable AGENT_CORE_TEST_GEMINI_KEY is unset or empty",
+      "",
+    ),
+  ];
+  for (const error of failures) assertNoHttpFields(error);
+});
+
+// Retry-After (#34): read as retryAfterMs in delay-seconds form only (H9), on a non-ok response only.
+
+test("a Retry-After in whole seconds is retryAfterMs on every error of a non-ok response", async () => {
+  const quota = await expectFailure(
+    respondingFetch(429, QUOTA_BODY, { "retry-after": "30" }).fetch,
+    "API_ERROR",
+    QUOTA_MESSAGE,
+  );
+  assert.equal(quota.status, 429);
+  assert.equal(quota.retryAfterMs, 30000);
+  const now = await expectFailure(
+    respondingFetch(503, "", { "retry-after": "0" }).fetch,
+    "API_ERROR",
+    `Gemini 503 from ${ENDPOINT}: (empty body)`,
+  );
+  assert.equal(now.status, 503);
+  assert.equal(Object.hasOwn(now, "retryAfterMs"), true);
+  assert.equal(now.retryAfterMs, 0);
+  const noModel = await expectFailure(
+    respondingFetch(404, NOT_FOUND_BODY, { "retry-after": "5" }).fetch,
+    "MODEL_NOT_FOUND",
+    NOT_FOUND_MESSAGE,
+  );
+  assert.equal(noModel.status, 404);
+  assert.equal(noModel.retryAfterMs, 5000);
+  const unreadable = await expectFailure(
+    unreadableFetch(429, new Error("socket closed"), { "retry-after": "30" }),
+    "API_ERROR",
+    "Gemini 429 response body could not be read: Error: socket closed",
+  );
+  assert.equal(unreadable.status, 429);
+  assert.equal(unreadable.retryAfterMs, 30000);
+});
+
+test("a Retry-After in any other form, or none, leaves retryAfterMs unset and the status set", async () => {
+  const invalid = ["", "-1", "1.5", "30s", "Wed, 21 Oct 2015 07:28:00 GMT", "99999999999999999999"];
+  for (const value of invalid) {
+    const error = await expectFailure(
+      respondingFetch(429, QUOTA_BODY, { "retry-after": value }).fetch,
+      "API_ERROR",
+      QUOTA_MESSAGE,
+    );
+    assert.equal(error.status, 429);
+    assert.equal(Object.hasOwn(error, "retryAfterMs"), false, `retry-after: ${value}`);
+  }
+  const none = await expectFailure(respondingFetch(429, QUOTA_BODY).fetch, "API_ERROR", QUOTA_MESSAGE);
+  assert.equal(none.status, 429);
+  assert.equal(Object.hasOwn(none, "retryAfterMs"), false);
+});
+
+test("an ok response carries neither status nor retryAfterMs, whatever its Retry-After", async () => {
+  assertNoHttpFields(
+    await expectFailure(
+      respondingFetch(200, "not json", { "retry-after": "30" }).fetch,
+      "API_ERROR",
+      "Gemini 200 response is not JSON: not json",
+    ),
+  );
+  assertNoHttpFields(
+    await expectFailure(
+      unreadableFetch(200, new Error("socket closed"), { "retry-after": "30" }),
+      "API_ERROR",
+      "Gemini 200 response body could not be read: Error: socket closed",
+    ),
+  );
+});
+
+test("the key planted in Retry-After never shows in the serialized error", async () => {
+  const error = await expectFailure(
+    respondingFetch(429, QUOTA_BODY, { "retry-after": PLANTED_KEY }).fetch,
+    "API_ERROR",
+    QUOTA_MESSAGE,
+    PLANTED_KEY,
+  );
+  assert.equal(error.status, 429);
+  assert.equal(Object.hasOwn(error, "retryAfterMs"), false);
+  assert.equal(Object.hasOwn(error, "cause"), false);
+  assert.equal(exposed(error).includes(PLANTED_KEY), false);
+  assert.doesNotMatch(exposed(error), /cle-/);
+});
