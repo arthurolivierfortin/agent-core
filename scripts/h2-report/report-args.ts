@@ -47,11 +47,14 @@ export function parseReportArgs(argv: readonly string[], today: Date = new Date(
   });
   const cap = values["cap-usd"];
   if (cap === undefined) throw new Error("--cap-usd is required");
-  if (!/^\d+(\.\d+)?$/.test(cap) || Number(cap) === 0) {
+  // Finite too: some 309 digits or more pass the pattern and read as Infinity (#35).
+  if (!/^\d+(\.\d+)?$/.test(cap) || Number(cap) === 0 || !Number.isFinite(Number(cap))) {
     throw new Error(`--cap-usd must be a decimal number > 0, got '${cap}'`);
   }
   const runs = values.runs ?? String(DEFAULT_RUNS);
-  if (!/^[1-9]\d*$/.test(runs)) throw new Error(`--runs must be an integer >= 1, got '${runs}'`);
+  if (!/^[1-9]\d*$/.test(runs) || !Number.isFinite(Number(runs))) {
+    throw new Error(`--runs must be an integer >= 1, got '${runs}'`);
+  }
   return {
     capUsd: Number(cap),
     runs: Number(runs),
