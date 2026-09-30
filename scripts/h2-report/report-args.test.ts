@@ -41,3 +41,12 @@ for (const [argv, expected] of REFUSED) {
     assert.throws(() => parseReportArgs(argv), expected);
   });
 }
+
+test("TEST-8 (issue 35) a --cap-usd or --runs read as Infinity is refused, a long finite --cap-usd is kept", () => {
+  const huge = "1".repeat(400);
+  assert.throws(() => parseReportArgs(["--cap-usd", huge]), badCap(huge));
+  assert.throws(() => parseReportArgs(["--cap-usd", "1", "--runs", huge]), {
+    message: `--runs must be an integer >= 1, got '${huge}'`,
+  });
+  assert.ok(Number.isFinite(parseReportArgs(["--cap-usd", "1".repeat(300)]).capUsd));
+});

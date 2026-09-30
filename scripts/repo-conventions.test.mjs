@@ -385,3 +385,19 @@ test("TEST-1 (issue 20) tsconfig.json vérifie scripts/, tsconfig.build.json ne 
   assert.equal(build.compilerOptions.rootDir, "src");
   assert.equal(build.compilerOptions.allowImportingTsExtensions, false);
 });
+
+// Phrase de #34 que porte l'en-tête du fournisseur Gemini, coupée en lignes de 100 colonnes au plus.
+const HTTP_STATUS_SENTENCE =
+  "HTTP status (#34): docs/specs/2026-09-30-llm-error-status-design.md. Every LLMError of a non-ok response" +
+  " carries status, even when its body cannot be read; a network failure or an ok response carries none.";
+
+test("TEST-10 (issue 35) l'en-tête Gemini porte la phrase de #34 en lignes de 100 colonnes au plus", () => {
+  const lines = splitLines(readRepoFile("src/llm/providers/gemini/gemini-llm-provider.ts"));
+  const start = lines.findIndex((line) => line.startsWith("// HTTP status (#34):"));
+  assert.notEqual(start, -1, "gemini-llm-provider.ts : ligne « // HTTP status (#34): » introuvable");
+  const end = lines.findIndex((line, index) => index >= start && line.endsWith("carries none."));
+  assert.notEqual(end, -1, "gemini-llm-provider.ts : fin de la phrase de #34 introuvable");
+  const block = lines.slice(start, end + 1);
+  for (const line of block) assert.ok(line.length <= 100, `gemini-llm-provider.ts : ${line.length} colonnes : ${line}`);
+  assert.equal(block.map((line) => line.replace(/^\/\/ /, "")).join(" "), HTTP_STATUS_SENTENCE);
+});
