@@ -184,3 +184,15 @@ for (const [title, error, reason] of REJECTIONS) {
     assert.deepEqual([guard.cutReason(), guard.refused()], [reason, 1]);
   });
 }
+
+test("TEST-7 (issue 35) a resolved call without usage is returned, then cuts the matrix (unclassified)", async () => {
+  const bare: LLMResponse = { content: "no usage", toolCalls: [] };
+  const double = scripted([PRICED, { response: bare }]);
+  const guard = capGuard(double.provider, RATES, 10);
+  await guard.complete(HI, OPTS);
+  assert.equal(await guard.complete(HI, OPTS), bare);
+  assert.deepEqual([guard.cutReason(), guard.spentUsd()], ["unclassified", 0.5]);
+  await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unclassified") });
+  assert.equal(double.count(), 2);
+  assert.equal(guard.refused(), 1);
+});

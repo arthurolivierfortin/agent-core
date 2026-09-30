@@ -84,7 +84,9 @@ export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number
     }
     const usage = { tokensIn: response.usage?.tokensIn ?? null, tokensOut: response.usage?.tokensOut ?? null };
     const cost = aggregate([{ model: opts.model, ...usage, durationMs: 0 }], rates).costUsd;
-    if (cost !== null) spent += cost;
+    // Returned all the same, since the call took place; a cost that became unknown cuts the matrix.
+    if (cost === null) cut ??= "unclassified";
+    else spent += cost;
     return response;
   }
 
