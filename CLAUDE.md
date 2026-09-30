@@ -18,7 +18,7 @@ derogations:
 
 # agent-core
 
-Cœur d'agent réutilisable : `defineAgent`, boucle `AgenticLLM` à budget, outils dispatchés sans exception, port `LLMProvider` et adaptateurs, harnais de scénarios (simulateur avec état, `defineScenario`, `runScenario`). Voir README.md et `docs/guide-agent-package.md` ; décisions dans `docs/decisions/` (ADR-AGENT-0001 à 0020).
+Cœur d'agent réutilisable : `defineAgent`, boucle `AgenticLLM` à budget, outils dispatchés sans exception, port `LLMProvider` et adaptateurs, harnais de scénarios (simulateur avec état, `defineScenario`, `runScenario`). Voir README.md et `docs/guide-agent-package.md` ; décisions dans `docs/decisions/` (ADR-AGENT-0001 à 0020 copiés de NATHAN, 0021 natif du dépôt).
 
 Origine : copie sans historique, le 2026-09-29, du package d'agents du projet NATHAN (`A-World-Felt/NATHAN-agent-package`, branche `feat/demo-navigation-app` fusionnée avec `feat/DEV-197-test-harness`), dont Arthur-Olivier Fortin est l'unique auteur. Les clés `DEV-xxx` citées dans les ADR renvoient au suivi Jira de ce projet d'origine ; ici, le suivi est en issues GitHub et les conventions sont celles de dev-kit.
 

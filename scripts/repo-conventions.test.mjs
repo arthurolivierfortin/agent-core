@@ -184,9 +184,23 @@ test("TEST-1 (issue 7) CLAUDE.md cite l'intervalle exact des ADR", () => {
     Array.from({ length: count }, (_, index) => index + 1),
     "docs/decisions/ : numéros d'ADR non contigus depuis 0001",
   );
+  // Les ADR copiés de NATHAN sont ceux que la note d'origine du registre déclare copiés ;
+  // les suivants sont natifs du dépôt (ADR-AGENT-0021 depuis main 85771db).
+  const note = splitLines(readRepoFile("docs/decisions/README.md"))[0];
+  const copiedMatch = /`ADR-AGENT-0001` à `ADR-AGENT-(\d{4})` sont copiés/.exec(note);
+  assert.ok(copiedMatch !== null, "docs/decisions/README.md : note d'origine sans l'intervalle des ADR copiés");
+  const copied = Number(copiedMatch[1]);
+  assert.ok(copied <= count, "docs/decisions/README.md : plus d'ADR copiés que de fichiers ADR");
+  const pad = (n) => String(n).padStart(4, "0");
+  const natives =
+    count === copied
+      ? ""
+      : count === copied + 1
+        ? `, ${pad(count)} natif du dépôt`
+        : `, ${pad(copied + 1)} à ${pad(count)} natifs du dépôt`;
   const claude = readRepoFile("CLAUDE.md");
   assert.equal(claude.split("(ADR-AGENT-0001 à ").length - 1, 1, "CLAUDE.md : « (ADR-AGENT-0001 à » absent ou répété");
-  const expected = `(ADR-AGENT-0001 à ${String(count).padStart(4, "0")})`;
+  const expected = `(ADR-AGENT-0001 à ${pad(copied)} copiés de NATHAN${natives})`;
   assert.ok(claude.includes(expected), `CLAUDE.md : intervalle des ADR attendu ${expected}`);
 });
 
