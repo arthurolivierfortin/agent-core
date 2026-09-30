@@ -79,7 +79,7 @@ test("TEST-4 le guide porte la note d'origine", () => {
   for (const expected of ["DEV-xxx", "Jira", "arthurolivierfortin/agent-core", "CONTRIBUTING.md", "dev-kit", "docs/specs/", "docs/plans/"]) {
     assert.ok(note.includes(expected), `guide : note d'origine sans ${expected}`);
   }
-  assert.ok(!note.includes("—"), "guide : tiret cadratin dans la note d'origine");
+  assert.ok(!note.includes("\u2014"), "guide : tiret cadratin dans la note d'origine");
   assert.ok(splitLines(guide).includes("# Claude Code Guidelines for nathan-agent-core"), "guide : titre d'origine disparu");
 });
 
@@ -90,7 +90,7 @@ test("TEST-5 le registre des ADR porte la note d'origine", () => {
   for (const expected of ["aucun ADR n'est réécrit", "DEV-xxx", "Jira", "NATHAN-console", "PMC/"]) {
     assert.ok(note.includes(expected), `registre ADR : note d'origine sans ${expected}`);
   }
-  assert.ok(!note.includes("—"), "registre ADR : tiret cadratin dans la note d'origine");
+  assert.ok(!note.includes("\u2014"), "registre ADR : tiret cadratin dans la note d'origine");
   assert.ok(registry.includes("An ADR is immutable once accepted"), "registre ADR : règle d'immuabilité disparue");
 });
 
