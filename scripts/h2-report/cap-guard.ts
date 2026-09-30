@@ -43,7 +43,8 @@ function classifyCut(error: unknown): CutReason {
  * as a method. It never streams, whatever the provider declares: a stream would escape the cap.
  *
  * A call's cost is aggregate() of its one record, the arithmetic of the report's total. spentUsd
- * adds up the numeric costs only, so that one unknown cost never masks it with null.
+ * adds up the finite, non-negative costs only: a cost that is null, not finite or negative is
+ * unknown, and cuts the matrix (unclassified) without entering it.
  *
  * The first rejected call cuts the matrix, classified on LLMError.status only. Its reason network
  * means an LLMError without status: with GeminiLLMProvider a rejected fetch, but also an ok
@@ -85,7 +86,8 @@ export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number
     const usage = { tokensIn: response.usage?.tokensIn ?? null, tokensOut: response.usage?.tokensOut ?? null };
     const cost = aggregate([{ model: opts.model, ...usage, durationMs: 0 }], rates).costUsd;
     // Returned all the same, since the call took place; a cost that became unknown cuts the matrix.
-    if (cost === null) cut ??= "unclassified";
+    // #39: a NaN, infinite or negative cost is unknown too; added up, it would blind the cap.
+    if (cost === null || !Number.isFinite(cost) || cost < 0) cut ??= "unclassified";
     else spent += cost;
     return response;
   }
