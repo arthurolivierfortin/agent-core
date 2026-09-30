@@ -1,3 +1,9 @@
+> **Note d'origine (agent-core).** Les ADR `ADR-AGENT-0001` à `ADR-AGENT-0020` sont copiés du package d'agents de NATHAN (`A-World-Felt/NATHAN-agent-package`) le 2026-09-29, et aucun ADR n'est réécrit. Les clés `DEV-xxx` qu'ils citent renvoient au suivi Jira de ce projet d'origine.
+>
+> `NATHAN-console`, `PMC/` et les ADR de projet `ADR-0001` à `ADR-0007` sont des dépôts et des documents du projet d'origine, absents de ce dépôt.
+>
+> Une décision revue ici prend un nouvel ADR, selon la règle d'immuabilité écrite ci-dessous.
+
 # Architecture decisions: nathan-agent-core
 
 Registry of the package's design decisions. Format imposed by project governance (`ADR-0007`, `NATHAN-console/docs/decisions/`): status, date, deciders, context, options considered, decision, consequences.

@@ -73,3 +73,14 @@ test("TEST-4 le guide porte la note d'origine", () => {
   assert.ok(!note.includes("—"), "guide : tiret cadratin dans la note d'origine");
   assert.ok(splitLines(guide).includes("# Claude Code Guidelines for nathan-agent-core"), "guide : titre d'origine disparu");
 });
+
+test("TEST-5 le registre des ADR porte la note d'origine", () => {
+  const registry = readRepoFile("docs/decisions/README.md");
+  assert.ok(splitLines(registry)[0].startsWith("> **Note d'origine"), "registre ADR : première ligne sans note d'origine");
+  const note = leadingQuoteBlock(registry);
+  for (const expected of ["aucun ADR n'est réécrit", "DEV-xxx", "Jira", "NATHAN-console", "PMC/"]) {
+    assert.ok(note.includes(expected), `registre ADR : note d'origine sans ${expected}`);
+  }
+  assert.ok(!note.includes("—"), "registre ADR : tiret cadratin dans la note d'origine");
+  assert.ok(registry.includes("An ADR is immutable once accepted"), "registre ADR : règle d'immuabilité disparue");
+});
