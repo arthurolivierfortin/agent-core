@@ -1,4 +1,4 @@
-import type { MatrixSummaryRow } from "./run-matrix.js";
+import type { MatrixRun, MatrixSummaryRow } from "./run-matrix.js";
 
 // The CSV views of a matrix report (#9), served by no barrel: a consumer calls `report.toCSV()`.
 
@@ -10,6 +10,16 @@ export function summaryCSV(summary: readonly MatrixSummaryRow<Axes>[], axisKeys:
   const lines = summary.map((row) => [
     row.scenario, ...axisKeys.map((key) => row.combination[key]), row.runs, row.passed,
     row.successRate, row.meanDurationMs, row.tokensUsed, row.costUsd,
+  ]);
+  return csvDocument([header, ...lines.map((line) => line.map(cellText))]);
+}
+
+/** One line per run, the same columns for the axes; `failures` joined by `; `, the JSON keeps the array. */
+export function runsCSV(runs: readonly MatrixRun<unknown, Axes>[], axisKeys: readonly string[]): string {
+  const header = ["scenario", ...axisKeys, "run", "passed", "failures", "error", "durationMs", "tokensUsed", "costUsd", "stopReason"];
+  const lines = runs.map((run) => [
+    run.scenario, ...axisKeys.map((key) => run.combination[key]), run.run, run.passed, run.failures.join("; "),
+    run.error, run.durationMs, run.tokensUsed, run.costUsd, run.trace.stopReason,
   ]);
   return csvDocument([header, ...lines.map((line) => line.map(cellText))]);
 }

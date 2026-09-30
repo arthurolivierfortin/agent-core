@@ -326,3 +326,29 @@ test("report.toCSV() writes one RFC 4180 line per summary row, CRLF, an empty ce
   const noAxis = (await matrix({})).toCSV();
   assert.equal(noAxis.split("\r\n")[0], "scenario,runs,passed,successRate,meanDurationMs,tokensUsed,costUsd");
 });
+
+test("report.toRunsCSV() writes one line per run: failures joined, a thrown error quoted, null empty", async () => {
+  const strict = defineScenario({
+    name: "aller aux reglages",
+    env: app,
+    input: "amene-moi aux reglages",
+    expect: { toolsUsed: ["navigate"], finalState: (s: FakeAppState) => s.current === "reglages", stopReason: "completed" },
+  });
+  let t = 0;
+  const report = await matrix({
+    scenarios: [strict],
+    axes: { model: ["a", "b"], memory: [null] },
+    deps: ({ model }) => {
+      if (model === "b") throw new Error('no "b", sorry');
+      return script(text("non", USAGE))();
+    },
+    now: () => (t += 10),
+  });
+
+  assert.equal(
+    report.toRunsCSV(),
+    "scenario,model,memory,run,passed,failures,error,durationMs,tokensUsed,costUsd,stopReason\r\n" +
+      "aller aux reglages,a,,1,false,toolsUsed: missing navigate; finalState: predicate returned false,,30,750000,,completed\r\n" +
+      'aller aux reglages,b,,1,false,,"no ""b"", sorry",10,0,,\r\n',
+  );
+});

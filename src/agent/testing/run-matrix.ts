@@ -4,7 +4,7 @@ import { MetricsCollector, withMetrics } from "../../metrics/index.js";
 import type { RateTable } from "../../metrics/index.js";
 import type { AgentDeps, StopReason } from "../application/dtos/index.js";
 import type { Scenario, ScenarioEnv } from "./define-scenario.js";
-import { summaryCSV } from "./matrix-csv.js";
+import { runsCSV, summaryCSV } from "./matrix-csv.js";
 import { runScenario } from "./run-scenario.js";
 
 /** One value per axis. Not exported: a consumer names it `MatrixRun<S, A>["combination"]`. */
@@ -79,6 +79,8 @@ export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]
   toJSON(): { runs: MatrixRun<TState, TAxes>[]; summary: MatrixSummaryRow<TAxes>[] };
   /** One line per `summary` row, one column per axis: RFC 4180, CRLF, an empty cell for null. */
   toCSV(): string;
+  /** One line per run, the same rules as `toCSV`; `failures` joined by `; `. */
+  toRunsCSV(): string;
 };
 
 /**
@@ -167,6 +169,7 @@ export async function runMatrix<TState, TAxes extends Record<string, readonly un
     summary,
     toJSON: () => ({ runs: runs.map(runData), summary: summary.map(rowData) }),
     toCSV: () => summaryCSV(summary, axisKeys),
+    toRunsCSV: () => runsCSV(runs, axisKeys),
   };
 }
 
