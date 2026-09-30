@@ -40,6 +40,7 @@ Scope of this series: the `@a-world-felt/nathan-agent-core` package only.
 | [ADR-AGENT-0018](ADR-AGENT-0018-demo-app-not-shipped-ui-component.md) | A demo app in `examples/`, not a shipped UI component | ✅ Accepted | 2026-08-03 |
 | [ADR-AGENT-0019](ADR-AGENT-0019-message-shape-belongs-to-the-llm-port.md) | The message list belongs to the LLM port, not to agent | ✅ Accepted, complements 0012 | 2026-08-03 |
 | [ADR-AGENT-0020](ADR-AGENT-0020-conversation-owns-the-session-history.md) | `Conversation` owns the session history, behind a `ConversationStore` port | ✅ Accepted, complements 0003 and 0016 | 2026-08-15 |
+| [ADR-AGENT-0021](ADR-AGENT-0021-le-contrat-comme-declaration-avant-le-moteur.md) | Le contrat est une déclaration typée (entrées, sorties, outils, fournisseur, évaluateurs), écrite avant tout moteur ; le moteur minimal collecte, exécute, valide, évalue, rapporte | ✅ Accepté, complète 0006 et 0007 | 2026-09-30 |
 
 ## Upcoming decisions
 
