@@ -1,3 +1,9 @@
+> **Note d'origine (agent-core).** Ce guide est copié tel quel, le 2026-09-29, du package d'agents de NATHAN (`A-World-Felt/NATHAN-agent-package`). Les clés `DEV-xxx` qu'il cite renvoient au suivi Jira de ce projet d'origine ; ici, le suivi se fait en issues GitHub de `arthurolivierfortin/agent-core`.
+>
+> Les renvois à `PMC/`, `NATHAN-console` et `CONTRIBUTING.md` visent des dépôts ou des fichiers du projet d'origine, absents de ce dépôt.
+>
+> Les conventions de branches, de commits et de PR sont celles de dev-kit (voir `CLAUDE.md`), et non la section « Branch and commit conventions » plus bas. Les dossiers `docs/specs/` et `docs/plans/` sont versionnés, contrairement à ce qu'indique le tableau « Where to find the why ».
+
 # Claude Code Guidelines for nathan-agent-core
 
 `@arthurolivierfortin/agent-core`: NATHAN's agentic LLM layer.

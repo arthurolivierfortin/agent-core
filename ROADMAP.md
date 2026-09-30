@@ -1,14 +1,14 @@
-# Roadmap: nathan-agent-core
+# Roadmap: agent-core
 
 Four versions. Since the layers are provider-agnostic, **choosing the provider is a late decision**: you start on what is free and local, then move up in quality afterward.
 
-The reasoning behind each choice is in `docs/decisions/`. The V1 PR breakdown is in `docs/plans/2026-07-21-v1-decoupage-pr.md`.
+The reasoning behind each choice is in `docs/decisions/`.
 
 ---
 
 ## Target consumer
 
-The package first serves **NATHAN's accessible IDE** (project ADR-0006, Flux E): a voice assistant for blind people, able to **navigate the application and write in it**. The agent translates dictation into MicroPython.
+The reference consumer is **Marcel**: its agent block (milestone J8) imports this package, and its first consumption, J8.1, is tracked by #4 (milestone H3).
 
 Permanent constraint, stated by the team:
 
@@ -37,7 +37,7 @@ It is the criterion that ruled out the generic permissions framework (`ADR-AGENT
 
 ### Breakdown into six PRs
 
-Each PR depends only on the previous ones, and **each PR verifies itself**. Full detail, pitfalls included: `docs/plans/2026-07-21-v1-decoupage-pr.md`.
+Each PR depends only on the previous ones, and **each PR verifies itself**.
 
 | PR | Contents | Completion criterion |
 |---|---|---|
@@ -48,13 +48,15 @@ Each PR depends only on the previous ones, and **each PR verifies itself**. Full
 | **5** | simulator + `defineScenario` + `runScenario` | one end-to-end navigation scenario, assertion on the **simulator state** |
 | **6** | `runMatrix` + metrics + `toJSON`/`toCSV` | a 2 × 2 × 5 matrix → 20 runs, one rate per combination, a readable CSV |
 
+PRs 1 to 5 were delivered in the origin project before the copy of 2026-09-29; PR 6 is tracked by #2 (milestone H1).
+
 Three ordering points that are not arbitrary:
 
 - **PR1 is not a PR of empty files.** A tree with no content cannot be verified. The milestone is the **distribution chain** (the package builds and installs) with the types as the only content, since they *are* the contract.
 - **The fake provider is in PR2, not in the harness.** Without it, PR4 would test *the model* instead of *our loop*. It also serves as interface verification: if the fake is painful to write, the port is bad, and we learn it right away.
 - **`LLMResponse.usage` is populated as of PR2.** The cost will be `null` everywhere in V1 on Ollama, but retrofitting the plumbing into every adapter later is expensive.
 
-**Then**: integration into the IDE repo, and back here when a wall appears.
+**Then**: integration into Marcel (#4), and back here when a wall appears.
 
 ---
 
@@ -64,6 +66,8 @@ Three ordering points that are not arbitrary:
 
 - A second adapter behind the same port: **no change to the engine**
 - Real evaluations: real model, simulated tools, matrix across several axes
+
+Tracked by #3 (milestone H2): the Gemini provider, the one Marcel uses, and a first real comparison report.
 
 > ### ⚠️ Correction: the subscription does not grant the API
 >
@@ -86,8 +90,6 @@ A `MemoryStrategy` that feeds itself, in the spirit of a `CLAUDE.md`, but per us
 **Plugs in without breaking anything**: `context/strategies/memory/` drops in next to `sliding-window/`, behind the same `ContextStrategy`. The engine does not move.
 
 This is the port's reason for being: sliding window and memory are **two strategies behind one contract**. Hence `observe()` present as of V1, even if `SlidingWindowStrategy.observe()` is a literal no-op there. The contract those strategies must respect is frozen by `ADR-AGENT-0016`.
-
-Accessibility stake: for a blind person dictating their code, an agent that remembers their habits avoids re-explaining everything at each session.
 
 ### The strategies intended here
 
@@ -179,19 +181,17 @@ src/
 
 ---
 
-## The cycle with the IDE repo
+## The cycle with Marcel
 
 The real engine that improves the package is not this roadmap, it is the confrontation with a real consumer:
 
 ```
-V1 shipped → integration into the IDE repo → harness on the real features
-   ↑                                                     │
-   └──────── we come back to improve the package ←──── a wall appears
+V1 shipped → integration into Marcel (#4) → harness on the real features
+   ↑                                                    │
+   └──────── we come back to improve the package ←─── a wall appears
 ```
 
-**Point of vigilance.** According to `PMC/CONTEXT-AGENT.md`, the IDE stack is decided at `TECH-19` in early S7 (January 2027) and Flux E starts at that point. The package will therefore be "finished" several months before its consumer exists.
-
-Practical consequence: **keep V1 truly minimal.** Every abstraction added before then is a bet with no feedback, and that is exactly how you build the wrong abstraction.
+Practical consequence: **keep V1 truly minimal.** Every abstraction added before Marcel consumes the package is a bet with no feedback, and that is exactly how you build the wrong abstraction.
 
 ---
 
@@ -209,11 +209,11 @@ Versioning and evaluation are the same feature seen from two angles: versioning 
 |---|---|
 | Policy layer (permissions) | a consumer exposes a broad capability, shell-like |
 | Container execution | same, and it is the **only** true security boundary |
-| User approval before writing | when the IDE repo needs it; `step()` makes it cheap |
+| User approval before writing | when Marcel needs it; `step()` makes it cheap |
 | Real tokenizer per model family | when calibration shows drift beyond margin |
 | Tool rendering in prompt (models without native calls) | when a targeted model is declared with `supportsTools: false` |
-| Web interface for reports | in the IDE repo, never in the package |
-| Reusable, restylable UI component for the agent loop (a `./ui` entry point) | after IDE integration surfaces the real shape needed. Until then, a plain demo app in `examples/` covers both showing the package working and iterating on it locally, with no new public surface. See `ADR-AGENT-0018` |
+| Web interface for reports | in the consumer (Marcel), never in the package |
+| Reusable, restylable UI component for the agent loop (a `./ui` entry point) | after Marcel's integration surfaces the real shape needed. Until then, a plain demo app in `examples/` covers both showing the package working and iterating on it locally, with no new public surface. See `ADR-AGENT-0018` |
 | CI replaying the test and typecheck gates on a PR | when the Actions minutes are worth paying for. Deliberately absent, not an oversight: the gates run locally and in the review cycle, and `publish.yml` was trimmed to build and publish for the same reason. Until then the suite is advisory, whoever pushes is what enforces it |
 | Declared-model verification against the server (`ADR-AGENT-0017`) | when a deployment actually runs a local server. The showcase prototype calls hosted providers, where a declared model cannot be missing from a local install, so the gap does not arise. Until then the first call reports it, with the `ollama pull` command to run |
 | Declarative vocabulary for tool-call sequences (order between named tools, a pipeline triggered freely then followed in order, periodicity across a run) | a second real scenario, in this package or a consumer, needs to check more than presence, final state, or `stopReason` |
