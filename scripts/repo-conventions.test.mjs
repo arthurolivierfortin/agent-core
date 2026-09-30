@@ -189,3 +189,22 @@ test("TEST-1 (issue 7) CLAUDE.md cite l'intervalle exact des ADR", () => {
   const expected = `(ADR-AGENT-0001 à ${String(count).padStart(4, "0")})`;
   assert.ok(claude.includes(expected), `CLAUDE.md : intervalle des ADR attendu ${expected}`);
 });
+
+test("TEST-2 (issue 7) CLAUDE.md ne rapporte les clés DEV-xxx qu'aux ADR", () => {
+  const claude = readRepoFile("CLAUDE.md");
+  const keyLines = splitLines(claude).filter((line) => line.includes("`DEV-xxx`"));
+  assert.equal(keyLines.length, 1, "CLAUDE.md : une et une seule ligne doit citer `DEV-xxx`");
+  assert.ok(keyLines[0].includes("citées dans les ADR renvoient"), "CLAUDE.md : les clés DEV-xxx ne sont pas rapportées aux seuls ADR");
+  assert.ok(!keyLines[0].includes("ROADMAP"), "CLAUDE.md : les clés DEV-xxx sont encore rapportées au ROADMAP");
+  assert.ok(claude.includes("feat/DEV-197-test-harness"), "CLAUDE.md : branche d'origine feat/DEV-197-test-harness disparue");
+  const roadmap = readRepoFile("ROADMAP.md");
+  assert.ok(!roadmap.includes("DEV-xxx"), "ROADMAP.md contient DEV-xxx");
+  assert.ok(!/\bDEV-\d+\b/.test(roadmap), "ROADMAP.md contient une clé DEV-NNN");
+  const adrs = readdirSync(new URL("../docs/decisions/", import.meta.url)).filter(
+    (name) => name.startsWith("ADR-AGENT-") && name.endsWith(".md"),
+  );
+  assert.ok(
+    adrs.some((name) => /\bDEV-\d+\b/.test(readRepoFile(`docs/decisions/${name}`))),
+    "docs/decisions/ : aucun ADR ne cite de clé DEV-NNN, CLAUDE.md ne doit plus les rapporter aux ADR",
+  );
+});
