@@ -17,8 +17,21 @@ Spécification : docs/specs/2026-09-30-gemini-provider-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **H5** (spécification) · L'API accepte la clé dans l'en-tête `x-goog-api-key` (et non seulement en paramètre `?key=`). Non vérifiée contre l'API réelle ; première vérification possible au premier appel réel (#26 intégration ou #20). Verrou : le test « hypothesis H5: the API key travels in the x-goog-api-key header ».
+- [H] **H1** (héritée de #18) · `generateContent` est servi sous `v1beta` ; toujours non vérifiée, verrouillée dans `tests/llm/providers/gemini/gemini-wire.test.ts`, reprise ici par les URL attendues de H5 et du cas `baseURL`.
+- [H] **H6** (spécification, « Hypothèses restantes ») · Les deux en-têtes `content-type` et `x-goog-api-key` suffisent ; aucun autre en-tête n'est envoyé. Non vérifiée.
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1, comme le prévoit la spécification (précédent de #18).
+- [H] **P2** · État intermédiaire des tâches 1 et 2 : `const apiKey = process.env[this.apiKeyVar] ?? "";` envoie une clé vide faute de variable, jusqu'à la tâche 3 qui remplace cette ligne par la levée `MISSING_API_KEY` (provisoire prévu par la spécification). TEST-1 fixe toujours la clé et n'observe pas ce provisoire.
+- [H] **P3** · Découpage des tests : TEST-1 en six `test()` (un par cas a à f), TEST-2 en deux (a et b ensemble, c seul), TEST-3 en deux (a et b ensemble, c et d ensemble) ; les titres autres que celui de H5 sont choisis par ce plan. Un cas qui regroupe deux sous-cas vérifie le compteur du double injoignable après chacun (TEST-2) ou à la fin (TEST-3, double commun, compteur cumulé à 0).
+- [H] **P4** · Les rouges de TEST-2 (a et b) et de TEST-3 échouent sur la première assertion de l'aide `llmError` (`'Error' !== 'LLMError'`) : le double injoignable, appelé, lève `Error("fetch must not be called")`, qui arrive avant la vérification du compteur. Même cause de fond que la spécification (« appelle le double, compteur à 1 ») : la garde n'existe pas encore.
+- [H] **P5** · `NAVIGATE` et `CONVERSATION` portent `as const` sur leurs littéraux (`type`, `role`) pour satisfaire `ToolSchema` et `Message` sans importer de type : la liste d'imports du test reste celle de la spécification. `CONVERSATION` (nom ajouté par ce plan) évite d'écrire deux fois les messages de H5, passés à `complete()` puis à `toGeminiRequest`.
+- [H] **P6** · Aides de test : `withEnv(values, body)` asynchrone et `setEnv(name, value)` (suppression par `delete` pour `undefined`, à l'écriture comme à la restauration), `capturingFetch()` (rend `{ fetch, calls }`, chaque appel `{ url, init }`), `unreachableFetch()` (rend `{ fetch, count }`), `llmError(code, present, absent)` (nom `LLMError`, code, motifs présents et absents, forme de `tests/llm/providers/ollama/ollama-adapter.test.ts:55-60`).
+- [H] **P7** · « Égal strictement à `DECLARED` » est vérifié par `assert.deepStrictEqual`, comme le définit la spécification, et non par identité de référence.
+- [H] **P8** · La garde de modèle est une méthode privée `assertDeclared(model)`, en miroir de `OllamaLLMProvider.assertDeclared` (même message), plutôt qu'un bloc en ligne dans `complete()`.
+- [H] **P9** · Rédaction des commentaires et JSDoc (anglais, style du dépôt, le pourquoi) choisie par ce plan dans le cadre de la spécification ; le JSDoc de `baseURL` porte les trois faits exigés (racine sans version ni barre finale, défaut `GEMINI_DEFAULT_BASE_URL`, ne pas passer `/v1beta`, que `geminiGenerateContentUrl` ajoute).
+- [H] **P10** · Taille : 347 lignes mesurées contre environ 285 estimées, sous le seuil de 400, sans dérogation (section « Taille mesurée » du plan).
