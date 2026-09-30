@@ -21,8 +21,25 @@ Spécification : docs/specs/2026-09-30-gemini-errors-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **H7** (spécification) · Gemini répond à un modèle inconnu par 404 et un corps `{"error":{"code":404,"message":…,"status":"NOT_FOUND"}}`, et un chemin qui n'atteint pas l'API (mauvais `baseURL`) ne rend pas cette forme. Non vérifiée contre l'API réelle. Verrou : le test « hypothesis H7: an unknown model answers 404 with error.status NOT_FOUND ».
+- [H] **H8** (spécification) · Les corps d'erreur de Gemini ont la forme `{ error: { code, message, status } }`. Non vérifiée. Verrou : le test « hypothesis H8: an API error body is { error: { code, message, status } } ».
+- [H] **H1, H5, H6** (#18, #19) · Restent en l'état, non vérifiées ; H5 garde son test verrou.
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1 (spécification, précédents de #18 et #19).
+- [H] **P2** · « `KEY_VAR = "cle-factice-1"` » de la checklist se lit comme la valeur donnée à la variable nommée `KEY_VAR` (`withEnv({ [KEY_VAR]: "cle-factice-1" })`), `KEY_VAR` restant `"AGENT_CORE_TEST_GEMINI_KEY"` : c'est la lecture de la spécification (section « Tests », « Clé `cle-factice-1` pour TEST-1 à TEST-4, `cle-factice-ne-pas-afficher` pour TEST-5 »).
+- [H] **P3** · Découpage et titres des tests choisis par ce plan, hors H7 et H8 : TEST-1 en quatre `test()` ((a) ; (b) et (c) ; (d) ; (e)), TEST-2 en deux ((a) ; (b) et (c)), TEST-3 en un, TEST-4 en deux ((a) à (d) en table ; (e)), TEST-5 en sept `test()` générés par la table `REDACTION_CASES`. Un test qui regroupe des cas s'arrête au premier échec.
+- [H] **P4** · Le test « only a 404 whose error.status is NOT_FOUND is MODEL_NOT_FOUND » (cas (b) et (c) de TEST-2) est déjà vert avant SPEC-2 : il verrouille la frontière de SPEC-2 ; le rouge de TEST-2 est porté par le cas (a) (H7).
+- [H] **P5** · Aides de test ajoutées : `ENDPOINT` ; `respondingFetch(status, body)` rend `{ fetch, count }` ; `unreadableFetch(status, error)` et `rejectingFetch(reason)` rendent directement un `typeof fetch` ; type `TransportError` ; `expectFailure(fetchFn, code, message, key = "cle-factice-1")` vérifie `name`, `code` et message par `assert.equal` (égalité exacte, permise par la spécification) et rend l'erreur ; `exposed(error)` ; `PLANTED_KEY` porte la valeur K. Les aides existantes (`withEnv`, `MODEL`, `DECLARED`, `KEY_VAR`) sont réutilisées ; `llmError` ne sert pas aux nouveaux tests (elle compare par motifs, pas par égalité).
+- [H] **P6** · Entre SPEC-1 et SPEC-5, `excerpt` s'applique à des chaînes non masquées (état intermédiaire prévu par la spécification, module servi par aucun barrel). L'en-tête du module ne mentionne le masquage qu'à partir de la tâche 5, pour qu'aucun commit n'affirme ce qu'il ne fait pas.
+- [H] **P7** · Noms locaux et commentaires choisis par ce plan dans le cadre de la spécification : `url`, `reason`, `quoted`, `extract`, `errorStatus`, `safeUrl` ; commentaires en anglais qui nomment D2 à D8. `geminiErrorOf` rend `{ status: undefined, message: undefined }` pour un objet `error` sans champ chaîne (la spécification : « chacun repris seulement s'il est de type `string` »), ce qui donne alors le texte du corps comme extrait.
+- [H] **P8** · Le commentaire du constructeur « which the 404 reveals (#25) » est gardé tel quel : il devient vrai avec l'indice `baseURL` (D8), et la spécification ne demande de changer que l'en-tête du module.
+- [H] **P9** · Une `LLMError` levée par `fromGeminiResponse` est relevée par `new LLMError(error.code, redactKey(error.message, apiKey))` : sa pile est celle du nouvel objet, levé dans `complete()`. `instanceof LLMError` est fiable, `gemini-wire.ts` important la même classe du même module.
+- [H] **P10** · Taille : 318 lignes ajoutées mesurées contre environ 265 estimées (fourchette 240 à 310), sous le seuil de 400, sans dérogation.
+- [H] **Limite déclarée (candidats nuls)** · Un corps objet JSON aberrant comme `{"candidates":[null]}` fait encore lever une `TypeError` à `fromGeminiResponse` (candidat à une issue de suivi).
+- [H] **Limite déclarée (D4, cause perdue)** · `cause.cause` d'un `fetch` rejeté (code réseau d'undici) est perdu : aucune cause n'est chaînée, seul `String(cause)` masqué et borné entre dans le message.
+- [H] **Limite déclarée (D9, clé très courte)** · Le masquage est littéral (`replaceAll`) : une clé très courte (un caractère) masque trop, toute occurrence de sa chaîne dans un message devenant `[redacted]` ; accepté, la sûreté passe avant la lisibilité.
+- [H] **Limite déclarée (hors périmètre)** · Ni nouvelle tentative, ni délai, ni `AbortSignal`.
