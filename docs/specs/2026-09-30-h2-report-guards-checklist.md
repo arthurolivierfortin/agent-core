@@ -29,8 +29,26 @@ Spécification : docs/specs/2026-09-30-h2-report-guards-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **S1** (spécification) · Node local ≥ 22.18, retrait de types sans drapeau : confirmé par le planificateur (`node --version` → `v22.19.0`) et par la sonde (41 tests de `scripts/h2-report/` découverts par `node --test`). La CI (`.github/workflows/publish.yml:52`) demande `node-version: '22'`, soit la dernière 22.x.
+- [H] **S2** (spécification) · `effectiveFrom` d'une entrée à tarif `null` = date de rédaction de l'entrée (2026-09-30), faute d'autre sens.
+- [H] **S3** (spécification) · `loadRateFile` valide `effectiveFrom` et `source` sans les rendre (la `RateTable` du paquet ne les porte pas) : si l'annonce de #33 doit les citer, #33 ajoutera une lecture qui les rend.
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1 (précédents de #25 et #34).
+- [H] **P2** · `--cap-usd ""` et `--runs ""` sont refusés par leur message de format (`--cap-usd must be a decimal number > 0, got ''`, `--runs must be an integer >= 1, got ''`), pas par `must not be empty` : la spécification rattache « valeur vide → `--<option> must not be empty` » à la puce de `--ollama-model`, `--gemini-model` et `--out`. Non testé (hors des douze refus de la table de TEST-5).
+- [H] **P3** · Ordre des contrôles d'une entrée : champs (manquant, puis en trop ; manquants dans l'ordre `rate`, `effectiveFrom`, `source`), puis `effectiveFrom`, puis `source`, puis `rate` : R1 a besoin d'une `source` validée avant de lire les prix. Dans un tarif, une composante est contrôlée (type, finitude, signe) avant R1, `usdPerMillionTokensIn` avant `usdPerMillionTokensOut`. L'identifiant est inséré tel quel dans `rates['<id>']` (aucun échappement).
+- [H] **P4** · Titres et découpage choisis par ce plan : TEST-1 en français comme son fichier (`scripts/repo-conventions.test.mjs`), TEST-2 à TEST-9 en anglais comme la suite `.ts` de `tests/` ; chaque ligne des tables de TEST-2 et TEST-5 est un `test()` titré `TEST-N (issue 20) refuses …` ; 41 tests au total (TEST-1 : 1, TEST-2 : 18, TEST-3 : 1, TEST-4 : 1, TEST-5 : 14, TEST-8 : 4, TEST-9 : 2).
+- [H] **P5** · TEST-2 compte seize lignes de refus pour les onze défauts : le tableau de SPEC-2 donne plusieurs formes à certains défauts (racine `null` ou tableau ; date inexistante ou hors `AAAA-MM-JJ` ; composante non `number`, non finie ou négative), chacune testée. La composante non finie passe par `1e999` écrit dans le JSON brut (`JSON.parse` le lit `Infinity` ; `JSON.stringify` ne sait pas écrire `Infinity`).
+- [H] **P6** · Le message de `SyntaxError` attendu pour « JSON illisible » est lu à l'exécution (`JSON.parse("{")`) : il dépend de la version de V8 ; le préfixe `rates: not valid JSON: ` est, lui, écrit en toutes lettres.
+- [H] **P7** · TEST-8 compare les messages à l'égalité exacte, ce qui couvre « commence par `refusing to start before any network call:` et nomme `data/rates.json`, `gemini-2.5-flash`, `usdPerMillionTokensIn`, `usdPerMillionTokensOut` » de la checklist.
+- [H] **P8** · Le second test de TEST-9 (la valeur de la clé n'entre dans aucun message) est vert avant SPEC-9 : il verrouille l'interdit ; le rouge de TEST-9 est porté par le premier, qui verrouille aussi l'ordre (ligne de clé après les lignes de tarif).
+- [H] **P9** · Le `--out` explicite de TEST-5 vaut `reports/custom` : il montre « rendu tel quel » (aucune barre ajoutée) sans verrouiller par un test la décision de la spécification qu'un `--out` explicite sous `docs/demo/` n'est pas refusé par C1 (protection laissée à l'écriture sûre de #33).
+- [H] **P10** · Les prix `{ usdPerMillionTokensIn: 0.3, usdPerMillionTokensOut: 2.5 }` de `rates.test.ts` et `start-guard.test.ts` sont des valeurs d'exemple, pas un tarif Gemini ; `data/rates.json` garde `null`.
+- [H] **P11** · Les erreurs de `parseArgs` (option inconnue, positionnel) ne sont pas enveloppées et sont testées par leur seul `code` (leur texte appartient à Node).
+- [H] **P12** · Au commit de la tâche 6, `env` est un paramètre non lu (signature de la spécification, lue à la tâche 7) : `tsconfig.json` n'active pas `noUnusedParameters`, aucune erreur (typecheck code 0 constaté).
+- [H] **P13** · Taille : 390 lignes ajoutées mesurées contre environ 315 estimées, sous le seuil de 400 (marge 10), sans dérogation ; première rédaction à 404, resserrée à 387 (v1), puis 390 (v2) (section « Taille mesurée »).
+- [H] **P14** · Le planificateur a avancé la branche sur `origin/main` (341f5bf, fusion de #36) par `git merge --ff-only`, à la demande du pilote ; aucun commit de merge.
+- [H] **P15** (décision du pilote, 2026-09-30, après le plan v1) · Aucun test ne fige `gemini-2.5-flash` à `null` dans le vrai `data/rates.json` : la saisie d'un tarif vérifié, daté et sourcé par Arthur ne doit faire échouer aucun test. TEST-4 vérifie seulement que le fichier se charge par `loadRateFile`, que chaque entrée a une date et une source non vides, que `qwen2.5:0.5b` vaut `{ 0, 0 }` avec la source `"local"`, que `gemini-2.5-flash` existe et vaut `null` ou un tarif aux deux composantes > 0, et que le texte n'a pas la forme d'une clé. TEST-8 et TEST-9 lisent un texte de tarifs littéral en fixture (`UNPRICED`, même contenu que le fichier livré). Écart de formulation avec la checklist, qui n'est pas modifiée par ce plan (elle appartient à spec-writer) : `[TEST-4]` y dit « obtenir `null` pour `gemini-2.5-flash` » et `[TEST-8]` « `loadRateFile` sur data/rates.json ». Le builder coche ces lignes en citant P15 ; une reformulation de la checklist relève du pilote.
