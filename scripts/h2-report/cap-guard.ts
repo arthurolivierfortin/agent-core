@@ -34,7 +34,15 @@ export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number
   let refusals = 0;
   let cut: CutReason | null = null;
 
+  // A refusal never reaches the provider, and counts one.
+  function refuse(model: string, why: string): never {
+    refusals++;
+    throw new Error(`capGuard refused a call to '${model}': ${why}`);
+  }
+
   async function guarded(messages: Message[], opts: CompletionOptions): Promise<LLMResponse> {
+    // Checked before the call only: an admitted call may cross the cap by its own cost, never more.
+    if (spent >= capUsd) refuse(opts.model, `${spent} USD spent reached the cap of ${capUsd} USD`);
     const response = await provider.complete(messages, opts);
     const usage = { tokensIn: response.usage?.tokensIn ?? null, tokensOut: response.usage?.tokensOut ?? null };
     const cost = aggregate([{ model: opts.model, ...usage, durationMs: 0 }], rates).costUsd;

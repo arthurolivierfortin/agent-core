@@ -64,3 +64,30 @@ test("TEST-2 (issue 35) a capUsd that is not a finite number > 0 throws a RangeE
   assert.doesNotThrow(() => capGuard(double.provider, RATES, 0.01));
   assert.equal(double.count(), 0);
 });
+
+const capMessage = (spent: number, cap: number) =>
+  `capGuard refused a call to '${MODEL}': ${spent} USD spent reached the cap of ${cap} USD`;
+
+test("TEST-3 (issue 35) once spentUsd reaches the cap, the next call is refused and cutReason stays null", async () => {
+  const double = scripted([PRICED]);
+  const guard = capGuard(double.provider, RATES, 1);
+  await guard.complete(HI, OPTS);
+  await guard.complete(HI, OPTS);
+  await assert.rejects(guard.complete(HI, OPTS), { message: capMessage(1, 1) });
+  assert.equal(double.count(), 2);
+  assert.equal(guard.refused(), 1);
+  assert.equal(guard.cutReason(), null);
+});
+
+test("TEST-3 (issue 35) a call admitted under the cap crosses it by its own cost at most", async () => {
+  const double = scripted([PRICED]);
+  const guard = capGuard(double.provider, RATES, 0.75);
+  await guard.complete(HI, OPTS);
+  await guard.complete(HI, OPTS);
+  assert.equal(guard.spentUsd(), 1);
+  await assert.rejects(guard.complete(HI, OPTS), { message: capMessage(1, 0.75) });
+  await assert.rejects(guard.complete(HI, OPTS), { message: capMessage(1, 0.75) });
+  assert.equal(double.count(), 2);
+  assert.equal(guard.refused(), 2);
+  assert.equal(guard.cutReason(), null);
+});
