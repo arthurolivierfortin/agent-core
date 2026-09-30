@@ -19,8 +19,16 @@ Spécification : docs/specs/2026-09-30-with-metrics-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **H1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1, même pratique que #2 et #1.
+- [H] **H2** · Portées de commit : `feat(metrics)` pour SPEC-1 à SPEC-4 (sujets repris de la spécification), `chore(checklist)` pour le cochage des gates et l'inscription des hypothèses.
+- [H] **H3** · Rédaction des commentaires de conception (anglais, le pourquoi) et des noms de tests choisie par ce plan dans le cadre fixé par la spécification (« Signature et forme », « Chemin d'erreur », « Streaming »). Le commentaire de SPEC-1 mentionne aussi l'horloge non monotone et `() => performance.now()` (spécification, « Décisions »).
+- [H] **H4** · Découpage des tests : TEST-1 en deux cas (horloge scriptée ; horloge par défaut), TEST-2 en trois (refus `MODEL_NOT_FOUND`, erreur `=== boom`, succès puis échec), TEST-3 en deux (contrat ; streaming), TEST-4 = un cas étendu et un cas neuf.
+- [H] **H5** · « L'horloge scriptée est épuisée (quatre appels exactement) » est vérifié par `assert.throws(clock, /scripted clock exhausted after 4 readings/)` après les deux `complete` : une cinquième lecture aurait fait rejeter un `complete`, trois laisseraient une valeur.
+- [H] **H6** · Le cas `MODEL_NOT_FOUND` de TEST-2 décore `new FakeLLMProvider({ responses: [] })` : le fake refuse le modèle avant de lire son script.
+- [H] **H7** · TEST-2 et TEST-3 passent dès leur écriture (prévu par la spécification) ; leur non-vacuité est prouvée par des mutations locales non commitées, décrites dans les corps de commit des tâches 2 et 3 : `record` dans un `finally` (3 échecs sur 5) ; `supportsStreaming` délégué (1 échec sur 7) ; clé `stream` ajoutée (1 échec sur 7).
+- [H] **H8** · Les rouges et verts des tâches 1 à 4 se constatent fichier par fichier (`node --test <fichier>` après `npm run build`) ; la suite complète ne tourne qu'aux tâches 0 et 5.
