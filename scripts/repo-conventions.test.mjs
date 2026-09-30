@@ -3,7 +3,7 @@
 // Ce fichier ne lit aucun fichier .env : seulement les .env.example versionnés.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 function readRepoFile(relativePath) {
   return readFileSync(new URL("../" + relativePath, import.meta.url), "utf8");
@@ -243,4 +243,25 @@ test("TEST-3 (issue 7) le manifeste déclare la dérogation de langue", () => {
   ]) {
     assert.ok(block.includes(gate), `CLAUDE.md : gate perdu dans le manifeste : ${gate.trim()}`);
   }
+});
+
+test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-cases", () => {
+  const roadmap = readRepoFile("ROADMAP.md");
+  assert.ok(!roadmap.includes("infrastructure/with-metrics.ts"), "ROADMAP.md : ancien emplacement infrastructure/with-metrics.ts");
+  const lines = splitLines(roadmap);
+  const llm = lines.indexOf("  llm/");
+  const context = lines.indexOf("  context/");
+  assert.ok(llm !== -1 && context > llm, "ROADMAP.md : sous-arbres llm/ puis context/ introuvables");
+  assert.ok(!lines.slice(llm, context).some((line) => line.includes("with-metrics")), "ROADMAP.md : with-metrics encore sous llm/");
+  const metrics = lines.indexOf("  metrics/");
+  const voice = lines.findIndex((line, index) => index > metrics && line.startsWith("  voice/"));
+  assert.ok(metrics !== -1 && voice !== -1, "ROADMAP.md : sous-arbres metrics/ puis voice/ introuvables");
+  assert.ok(
+    lines.slice(metrics, voice).some((line) => line.includes("application/use-cases/with-metrics.ts") && line.includes("withMetrics")),
+    "ROADMAP.md : withMetrics absent de metrics/application/use-cases/",
+  );
+  assert.ok(
+    existsSync(new URL("../src/metrics/application/use-cases/with-metrics.ts", import.meta.url)),
+    "src/metrics/application/use-cases/with-metrics.ts introuvable",
+  );
 });
