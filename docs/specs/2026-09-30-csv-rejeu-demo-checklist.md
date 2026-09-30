@@ -27,8 +27,26 @@ Spécification : docs/specs/2026-09-30-csv-rejeu-demo-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **H1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1, même pratique que #11, #8 et #12.
+- [H] **H2** · Types et sujets de commit repris de la spécification (`feat(testing)` pour SPEC-1 à 4, `test(testing)` pour SPEC-5 à 7, `docs(testing)` pour SPEC-8), plus `chore(checklist)` pour le cochage des gates et l'inscription des hypothèses.
+- [H] **H3** · SPEC-5 et SPEC-6 sont des tests de non-régression sans rouge : `runData` copie déjà ces objets et recopie ces `null` depuis #12, et SPEC-5/SPEC-6 interdisent de modifier `src/`. La sonde a prouvé qu'ils mordent : TEST-5 échoue si `runData` rend `run.combination` tel quel, TEST-6 si `content` devient `undefined`.
+- [H] **H4** · Le rouge de TEST-7 est une `AssertionError` qui nomme `AGENT_CORE_WRITE_DEMO` (valeur lue `(missing)`), et non un `ENOENT` brut comme l'annonce la section « Ordre des commits » de la spécification : le test lit chaque fichier derrière `existsSync`, pour que l'échec « fichier absent » nomme lui aussi la variable (tableau « Chemins nominal et d'erreur » de la spécification et SPEC-7). Ce rouge porte sur l'absence des artefacts : `toCSV`, `toRunsCSV` et `replayRun` existent déjà depuis les tâches 1 à 3.
+- [H] **H5** · `cellText` s'écrit `value === null || value === undefined ? "" : String(value)` : pour une chaîne primitive, `String(value)` rend la chaîne elle-même, donc la branche « la chaîne pour une chaîne » de la checklist est couverte sans test de type.
+- [H] **H6** · `summaryCSV` et `runsCSV` sont typées sans générique, sur `Record<string, readonly unknown[]>` (`MatrixSummaryRow<Axes>`, `MatrixRun<unknown, Axes>`) : `run-matrix.ts` leur passe ses tableaux génériques sans conversion (build et typecheck de la sonde à code 0), et `combination[key]` se lit en `unknown` sans transtypage.
+- [H] **H7** · `csvDocument` reçoit des lignes de chaînes et leur applique `csvField` ; `cellText` est appliquée par `summaryCSV` et `runsCSV` à chaque valeur, en-tête compris (identité sur une chaîne), partage littéral de la checklist.
+- [H] **H8** · `axisKeys` est calculé juste après `const combinations = combinationsOf(options.axes);`, avant la boucle ; le retour de `runMatrix` passe sur plusieurs lignes ; le commentaire de conception de `runMatrix` gagne le renvoi à la spécification de #9.
+- [H] **H9** · TEST-3 vit dans son propre fichier avec ses aides locales (`text`, `navigate(page)`, `scenario`, `agent`, `context`, `replayDeps`, `matrix(llm, runs)`), les aides de `run-matrix.test.ts` n'étant pas exportées. Il assert en plus `[true, false]` pour `passed` des deux runs (garantit un run réussi et un échoué) et `run.error === "provider down"` pour le fournisseur littéral.
+- [H] **H10** · Démonstration : le compteur `fakeBRuns` n'avance que pour `fake-b` (court-circuit de `&&`), ses runs pairs (2 et 4) naviguent vers `profil` ; identifiant d'appel `call-navigate` ; textes « Vous etes aux reglages. » et « Vous etes au profil. » de la spécification ; `deps` déstructure `{ model }` et passe `model`, identique à `combination.model`.
+- [H] **H11** · `namedFake` rend un littéral à quatre membres (`id: "named-fake"`, sans `stream`) et déclare `supportsTools: true` pour son modèle.
+- [H] **H12** · `.gitattributes` porte une ligne de commentaire en plus de `docs/demo/** -text` (deux lignes), et doit exister avant le `git add` des artefacts (tâche 7).
+- [H] **H13** · Le message d'échec de la démonstration est `docs/demo/h1-matrix/<nom> is out of date: rerun with AGENT_CORE_WRITE_DEMO=1`.
+- [H] **H14** · TEST-8 s'appelle « TEST-8 (issue 9) … » : `scripts/repo-conventions.test.mjs` porte déjà un « TEST-8 » de #1, et un `#` dans un nom est échappé par TAP. Le tiret cadratin y est désigné par `String.fromCharCode(0x2014)`.
+- [H] **H15** · L'exemple du README utilise `OllamaLLMProvider` avec deux modèles locaux et des tarifs `null` (aucun fournisseur hébergé nommé), et reprend `navigateur` de « Running an agent ».
+- [H] **H16** · Guide l.130 : « It lives where it wraps » devient « It lives with the metrics it feeds », la phrase ne décrivant plus un fichier sous `llm/`. L'arborescence `metrics/` du guide (`infrastructure/collector.ts`) et la ligne « re-exports llm/testing (+ agent/testing when it lands) », elles aussi périmées, restent hors périmètre (non demandées).
+- [H] **H17** · Rédaction des commentaires (anglais, le pourquoi, sans tiret cadratin), des noms de tests et des paragraphes de documentation choisie par ce plan dans le cadre fixé par la spécification.
+- [H] **H18** · La PR porte `Closes #9` : dernière issue du jalon H1.
