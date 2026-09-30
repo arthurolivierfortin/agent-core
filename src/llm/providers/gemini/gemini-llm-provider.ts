@@ -162,8 +162,12 @@ async function httpError(res: Response, url: string, model: string, apiKey: stri
   return new LLMError("API_ERROR", `Gemini ${res.status}${errorStatus} from ${safeUrl}: ${extract}`, http);
 }
 
-/** Retry-After in delay-seconds form, as milliseconds; undefined when absent or in any other form. */
+/**
+ * Retry-After in delay-seconds form, as milliseconds; undefined when absent, in any other form, or
+ * when the response has no headers: an injected fetch may answer an object without them (#35).
+ */
 function retryAfterMsOf(res: Response): number | undefined {
+  if (typeof res.headers?.get !== "function") return undefined;
   const raw = res.headers.get("retry-after");
   if (raw === null) return undefined;
   // delay-seconds of RFC 9110 section 10.2.3 only: an HTTP-date would need a clock (#34, D4).

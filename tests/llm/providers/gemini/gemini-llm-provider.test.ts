@@ -667,3 +667,15 @@ test("the key planted in Retry-After never shows in the serialized error", async
   assert.equal(exposed(error).includes(PLANTED_KEY), false);
   assert.doesNotMatch(exposed(error), /cle-/);
 });
+
+// An injected fetch may answer a non-ok object without headers (#35): retryAfterMsOf then reads none.
+
+test("TEST-9 (issue 35) a non-ok response without headers, or with null headers, keeps its status", async () => {
+  for (const headers of [{}, { headers: null }]) {
+    const res = { ok: false, status: 429, text: async () => QUOTA_BODY, ...headers };
+    const fetchFn = (async () => res as unknown as Response) as unknown as typeof fetch;
+    const error = await expectFailure(fetchFn, "API_ERROR", QUOTA_MESSAGE);
+    assert.equal(error.status, 429);
+    assert.equal(Object.hasOwn(error, "retryAfterMs"), false);
+  }
+});
