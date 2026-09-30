@@ -371,3 +371,16 @@ test("report.toJSON() copies each run's combination, failures and trace, and eac
   }
   assert.deepEqual([copy.combination, copy.failures], [{ model: "a" }, ["finalState: predicate returned false"]]);
 });
+
+test("report.toJSON() keeps a thrown run's finalState, stopReason and content as null keys, through JSON too", async () => {
+  const report = await matrix({ deps: () => { throw new Error("no wiring"); } });
+  const { trace } = report.toJSON().runs[0];
+  assert.deepEqual(Object.keys(trace), ["toolCalls", "finalState", "stopReason", "content", "responses"]);
+  assert.deepEqual([trace.finalState, trace.stopReason, trace.content], [null, null, null]);
+
+  const read = JSON.parse(JSON.stringify(report)).runs[0].trace;
+  for (const key of ["finalState", "stopReason", "content"]) {
+    assert.ok(Object.hasOwn(read, key), `${key} dropped by JSON.stringify`);
+    assert.equal(read[key], null);
+  }
+});
