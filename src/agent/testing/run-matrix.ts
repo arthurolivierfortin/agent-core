@@ -1,3 +1,5 @@
+import { MetricsCollector, withMetrics } from "../../metrics/index.js";
+import type { RateTable } from "../../metrics/index.js";
 import type { AgentDeps } from "../application/dtos/index.js";
 import type { Scenario } from "./define-scenario.js";
 import { runScenario } from "./run-scenario.js";
@@ -14,6 +16,10 @@ export type MatrixOptions<TState, TAxes extends Record<string, readonly unknown[
   readonly runs: number;
   /** Called once per run, so each run gets a fresh provider if this builds one. */
   readonly deps: (combination: Combination<TAxes>) => Omit<AgentDeps, "tools">;
+  /** Prices `costUsd`; without it every cost is null (ADR-AGENT-0007). */
+  readonly rates?: RateTable;
+  /** The clock of `durationMs` and of every call's record. Defaults to `Date.now`. */
+  readonly now?: () => number;
 };
 
 export type MatrixRun<TState, TAxes extends Record<string, readonly unknown[]>> = {
@@ -24,6 +30,10 @@ export type MatrixRun<TState, TAxes extends Record<string, readonly unknown[]>> 
   readonly run: number;
   readonly passed: boolean;
   readonly failures: readonly string[];
+  readonly durationMs: number;
+  /** Null as soon as one call reported no usage: absent is not zero (ADR-AGENT-0007). */
+  readonly tokensUsed: number | null;
+  readonly costUsd: number | null;
 };
 
 export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]>> = {
@@ -37,6 +47,12 @@ export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]
  * keeps a report against fakes reproducible. Options that would yield an empty report, which
  * reads as "nothing failed", are refused before any run.
  *
+ * Each run is measured by its own `MetricsCollector`, fed by `withMetrics` on `now`.
+ * `tokensUsed` comes from that collector, never from `AgentResult.tokensUsed` (pilot's
+ * decision): that one is the budget counter, 0 when the provider reports no usage, against
+ * ADR-AGENT-0007's "absent is not zero", and it does not exist for a run that throws, while the
+ * collector keeps the calls resolved before the error.
+ *
  * Design: docs/specs/2026-09-30-run-matrix-design.md (#8).
  */
 export async function runMatrix<TState, TAxes extends Record<string, readonly unknown[]>>(
@@ -49,10 +65,19 @@ export async function runMatrix<TState, TAxes extends Record<string, readonly un
   for (const name of Object.keys(options.axes)) {
     if (options.axes[name].length === 0) throw new RangeError(`runMatrix: axis '${name}' has no value`);
   }
+  const now = options.now ?? Date.now;
 
   const runOne = async (scenario: Scenario<TState>, combination: Combination<TAxes>, run: number) => {
-    const result = await runScenario(scenario, options.deps(combination));
-    return { scenario: result.scenario, combination, run, passed: result.passed, failures: result.failures };
+    const collector = new MetricsCollector();
+    const startedAt = now();
+    const wiring = options.deps(combination);
+    const llm = withMetrics(wiring.llm, collector, now);
+    const result = await runScenario(scenario, { ...wiring, llm });
+    const outcome = { scenario: result.scenario, passed: result.passed, failures: result.failures };
+    const durationMs = now() - startedAt;
+    const { tokensIn, tokensOut, costUsd } = collector.total(options.rates);
+    const tokensUsed = tokensIn === null || tokensOut === null ? null : tokensIn + tokensOut;
+    return { ...outcome, combination, run, durationMs, tokensUsed, costUsd };
   };
 
   const runs: MatrixRun<TState, TAxes>[] = [];

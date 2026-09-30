@@ -14,6 +14,8 @@ type Wiring = Omit<AgentDeps, "tools">;
 type Options = MatrixOptions<FakeAppState, Record<string, readonly unknown[]>>;
 
 const PAGES = ["accueil", "reglages", "profil"];
+const USAGE: Usage = { tokensIn: 500_000, tokensOut: 250_000 };
+const RATE = { usdPerMillionTokensIn: 2, usdPerMillionTokensOut: 8 };
 
 const app = (): FakeApp => fakeApp({ pages: PAGES, current: "accueil" });
 const text = (content: string, usage?: Usage): LLMResponse => ({ content, toolCalls: [], usage });
@@ -43,6 +45,15 @@ function matrix(options: Partial<Options>) {
   const scenarios = [scenario("aller aux reglages", "reglages")];
   const deps = script(navigate(), text("tu y es"));
   return runMatrix<FakeAppState, Options["axes"]>({ scenarios, axes: {}, runs: 1, deps, ...options });
+}
+
+/** Hands out `values` in order, then throws: a test can tell exactly how often it was read. */
+function scriptedClock(values: number[]): () => number {
+  let readings = 0;
+  return () => {
+    if (readings === values.length) throw new Error(`scripted clock exhausted after ${readings} readings`);
+    return values[readings++];
+  };
 }
 
 test("runMatrix runs every scenario on every combination, runs times, in order; no axis is one combination", async () => {
@@ -105,4 +116,33 @@ test("runMatrix refuses options that would yield an empty or truncated report, b
     await assert.rejects(matrix({ ...options, ...override }), { name: "RangeError", message });
     assert.deepEqual(calls, { deps: 0, env: 0 }, message);
   }
+});
+
+test("runMatrix measures each run's duration, tokens and cost on the injected clock", async () => {
+  const clock = scriptedClock([1000, 1010, 1030, 1040, 1100, 1500]);
+  const deps = script(navigate(USAGE), text("tu y es", USAGE));
+  const [run] = (await matrix({ deps, rates: { "fake-model": RATE }, now: clock })).runs;
+
+  assert.deepEqual([run.durationMs, run.tokensUsed, run.costUsd], [500, 1_500_000, 6]);
+  assert.throws(clock, /scripted clock exhausted after 6 readings/);
+});
+
+test("runMatrix reports null, never 0, for a missing usage or rate, with a fresh collector per run", async () => {
+  const measure = async (usage: Usage | undefined, options: Partial<Options>) => {
+    const { runs } = await matrix({ deps: script(navigate(usage), text("tu y es", usage)), ...options });
+    return runs.map((r) => [r.tokensUsed, r.costUsd]);
+  };
+
+  assert.deepEqual(await measure(undefined, { rates: { "fake-model": RATE } }), [[null, null]]);
+  assert.deepEqual(await measure(USAGE, { runs: 2 }), [[1_500_000, null], [1_500_000, null]]);
+  assert.deepEqual(await measure(USAGE, { rates: { "other-model": RATE } }), [[1_500_000, null]]);
+});
+
+test("runMatrix measures on Date.now when no clock is given", async (t) => {
+  const dateNow = t.mock.method(Date, "now", scriptedClock([100, 110, 150, 400]));
+  const deps = () => wiring(new FakeLLMProvider({ responses: [text("tu y es")] }), { now: () => 0 });
+  const [run] = (await matrix({ deps })).runs;
+
+  assert.equal(run.durationMs, 300);
+  assert.equal(dateNow.mock.callCount(), 4);
 });
