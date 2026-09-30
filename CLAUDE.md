@@ -10,13 +10,16 @@ gates:
   - id: GATE-2  name: typecheck  cmd: npm run typecheck
   - id: GATE-3  name: test  cmd: npm run test
 ux_verifier: disabled
-derogations: []
+derogations:
+  - rule: core/langue
+    reason: "le corps des documents hérités de NATHAN et copiés le 2026-09-29 reste en anglais, sans traduction, mises à jour comprises (README.md, ROADMAP.md, docs/guide-agent-package.md, docs/decisions/, docs/conventions/, docs/theory/, docs/schema/, docs/plans/2026-07-21-v1-decoupage-pr.md) ; leurs notes d'origine et tout nouveau document sont en français ; décision d'Arthur du 2026-09-30 sur #7"
+    revue_le: 2026-12-31
 -->
 
 # agent-core
 
-Cœur d'agent réutilisable : `defineAgent`, boucle `AgenticLLM` à budget, outils dispatchés sans exception, port `LLMProvider` et adaptateurs, harnais de scénarios (simulateur avec état, `defineScenario`, `runScenario`). Voir README.md et `docs/guide-agent-package.md` ; décisions dans `docs/decisions/` (ADR-AGENT-0001 à 0021).
+Cœur d'agent réutilisable : `defineAgent`, boucle `AgenticLLM` à budget, outils dispatchés sans exception, port `LLMProvider` et adaptateurs, harnais de scénarios (simulateur avec état, `defineScenario`, `runScenario`). Voir README.md et `docs/guide-agent-package.md` ; décisions dans `docs/decisions/` (ADR-AGENT-0001 à 0020 copiés de NATHAN, 0021 natif du dépôt).
 
-Origine : copie sans historique, le 2026-09-29, du package d'agents du projet NATHAN (`A-World-Felt/NATHAN-agent-package`, branche `feat/demo-navigation-app` fusionnée avec `feat/DEV-197-test-harness`), dont Arthur-Olivier Fortin est l'unique auteur. Les clés `DEV-xxx` citées dans les ADR et le ROADMAP renvoient au suivi Jira de ce projet d'origine ; ici, le suivi est en issues GitHub et les conventions sont celles de dev-kit.
+Origine : copie sans historique, le 2026-09-29, du package d'agents du projet NATHAN (`A-World-Felt/NATHAN-agent-package`, branche `feat/demo-navigation-app` fusionnée avec `feat/DEV-197-test-harness`), dont Arthur-Olivier Fortin est l'unique auteur. Les clés `DEV-xxx` citées dans les ADR renvoient au suivi Jira de ce projet d'origine ; ici, le suivi est en issues GitHub et les conventions sont celles de dev-kit.
 
 Règles propres : le package ne lit que `process.env`, jamais un fichier `.env` (c'est l'application qui le charge) ; aucun fournisseur hébergé n'est appelé dans la suite de tests par défaut ; le harnais émet des données et n'affiche rien.

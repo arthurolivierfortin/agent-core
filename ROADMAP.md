@@ -136,7 +136,6 @@ src/
       gemini/gemini-adapter.ts   GeminiLLMProvider           [V2]
       azure/azure-adapter.ts     AzureLLMProvider            [V2]
       index.ts                   PROVIDERS: Record<ProviderID, () => LLMProvider>
-    infrastructure/with-metrics.ts     withMetrics (LLMProvider → MetricsCollector decorator)
   context/
     interfaces/context-strategy.ts
     interfaces/token-counter.ts
@@ -153,6 +152,7 @@ src/
     models/index.ts              UsageRecord · MetricsTotal · RateTable
     interfaces/metrics-collector.ts
     services/aggregate.ts        pure: records → MetricsTotal (with RateTable)
+    application/use-cases/with-metrics.ts   withMetrics (LLMProvider → MetricsCollector decorator)
     infrastructure/collector.ts  MetricsCollector
   voice/                          [V4]: the whole framework
     interfaces/voice-provider.ts

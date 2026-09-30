@@ -3,7 +3,7 @@
 // Ce fichier ne lit aucun fichier .env : seulement les .env.example versionnés.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 function readRepoFile(relativePath) {
   return readFileSync(new URL("../" + relativePath, import.meta.url), "utf8");
@@ -169,4 +169,113 @@ test("TEST-8 (issue 9) le guide et le README documentent la matrice, ses exports
   assert.ok(!guide.includes("llm/infrastructure/with-metrics.ts"), "guide : ancien emplacement de withMetrics");
   const entry = splitLines(readme).find((line) => line.startsWith("| `./testing` |")) ?? "";
   for (const name of ["runMatrix", "replayRun"]) assert.ok(entry.includes(name), `README : ligne ./testing sans ${name}`);
+});
+
+test("TEST-1 (issue 7) CLAUDE.md cite l'intervalle exact des ADR", () => {
+  const numbers = readdirSync(new URL("../docs/decisions/", import.meta.url))
+    .map((name) => /^ADR-AGENT-(\d{4})-.+\.md$/.exec(name))
+    .filter((match) => match !== null)
+    .map((match) => Number(match[1]))
+    .sort((a, b) => a - b);
+  const count = numbers.length;
+  assert.ok(count > 0, "docs/decisions/ : aucun fichier ADR-AGENT-NNNN-*.md");
+  assert.deepEqual(
+    numbers,
+    Array.from({ length: count }, (_, index) => index + 1),
+    "docs/decisions/ : numéros d'ADR non contigus depuis 0001",
+  );
+  // Les ADR copiés de NATHAN sont ceux que la note d'origine du registre déclare copiés ;
+  // les suivants sont natifs du dépôt (ADR-AGENT-0021 depuis main 85771db).
+  const note = splitLines(readRepoFile("docs/decisions/README.md"))[0];
+  const copiedMatch = /`ADR-AGENT-0001` à `ADR-AGENT-(\d{4})` sont copiés/.exec(note);
+  assert.ok(copiedMatch !== null, "docs/decisions/README.md : note d'origine sans l'intervalle des ADR copiés");
+  const copied = Number(copiedMatch[1]);
+  assert.ok(copied <= count, "docs/decisions/README.md : plus d'ADR copiés que de fichiers ADR");
+  const pad = (n) => String(n).padStart(4, "0");
+  const natives =
+    count === copied
+      ? ""
+      : count === copied + 1
+        ? `, ${pad(count)} natif du dépôt`
+        : `, ${pad(copied + 1)} à ${pad(count)} natifs du dépôt`;
+  const claude = readRepoFile("CLAUDE.md");
+  assert.equal(claude.split("(ADR-AGENT-0001 à ").length - 1, 1, "CLAUDE.md : « (ADR-AGENT-0001 à » absent ou répété");
+  const expected = `(ADR-AGENT-0001 à ${pad(copied)} copiés de NATHAN${natives})`;
+  assert.ok(claude.includes(expected), `CLAUDE.md : intervalle des ADR attendu ${expected}`);
+});
+
+test("TEST-2 (issue 7) CLAUDE.md ne rapporte les clés DEV-xxx qu'aux ADR", () => {
+  const claude = readRepoFile("CLAUDE.md");
+  const keyLines = splitLines(claude).filter((line) => line.includes("`DEV-xxx`"));
+  assert.equal(keyLines.length, 1, "CLAUDE.md : une et une seule ligne doit citer `DEV-xxx`");
+  assert.ok(keyLines[0].includes("citées dans les ADR renvoient"), "CLAUDE.md : les clés DEV-xxx ne sont pas rapportées aux seuls ADR");
+  assert.ok(!keyLines[0].includes("ROADMAP"), "CLAUDE.md : les clés DEV-xxx sont encore rapportées au ROADMAP");
+  assert.ok(claude.includes("feat/DEV-197-test-harness"), "CLAUDE.md : branche d'origine feat/DEV-197-test-harness disparue");
+  const roadmap = readRepoFile("ROADMAP.md");
+  assert.ok(!roadmap.includes("DEV-xxx"), "ROADMAP.md contient DEV-xxx");
+  assert.ok(!/\bDEV-\d+\b/.test(roadmap), "ROADMAP.md contient une clé DEV-NNN");
+  const adrs = readdirSync(new URL("../docs/decisions/", import.meta.url)).filter(
+    (name) => name.startsWith("ADR-AGENT-") && name.endsWith(".md"),
+  );
+  assert.ok(
+    adrs.some((name) => /\bDEV-\d+\b/.test(readRepoFile(`docs/decisions/${name}`))),
+    "docs/decisions/ : aucun ADR ne cite de clé DEV-NNN, CLAUDE.md ne doit plus les rapporter aux ADR",
+  );
+});
+
+test("TEST-3 (issue 7) le manifeste déclare la dérogation de langue", () => {
+  const lines = splitLines(readRepoFile("CLAUDE.md"));
+  const start = lines.indexOf("<!-- core-project");
+  const end = lines.indexOf("-->");
+  assert.ok(start !== -1 && end > start, "CLAUDE.md : bloc <!-- core-project ... --> introuvable");
+  const block = lines.slice(start + 1, end);
+  assert.ok(!block.includes("derogations: []"), "CLAUDE.md : le manifeste déclare encore derogations: []");
+  const at = block.indexOf("derogations:");
+  assert.notEqual(at, -1, "CLAUDE.md : ligne derogations: absente du manifeste");
+  assert.equal(block[at + 1], "  - rule: core/langue", "CLAUDE.md : derogations: n'est pas suivi de la règle core/langue");
+  const reason = block[at + 2] ?? "";
+  assert.ok(reason.startsWith('    reason: "') && reason.endsWith('"'), "CLAUDE.md : la ligne reason n'est pas entre guillemets doubles");
+  assert.equal(reason.split('"').length - 1, 2, "CLAUDE.md : guillemet double dans le texte de reason");
+  assert.ok(!reason.slice(4).includes("  "), "CLAUDE.md : deux espaces consécutifs dans reason");
+  for (const expected of [
+    "anglais",
+    "français",
+    "README.md",
+    "ROADMAP.md",
+    "docs/guide-agent-package.md",
+    "docs/decisions/",
+    "docs/plans/2026-07-21-v1-decoupage-pr.md",
+    "#7",
+  ]) {
+    assert.ok(reason.includes(expected), `CLAUDE.md : reason de la dérogation sans ${expected}`);
+  }
+  assert.equal(block[at + 3], "    revue_le: 2026-12-31", "CLAUDE.md : revue_le de la dérogation absent ou différent");
+  for (const gate of [
+    "  - id: GATE-1  name: build  cmd: npm run build",
+    "  - id: GATE-2  name: typecheck  cmd: npm run typecheck",
+    "  - id: GATE-3  name: test  cmd: npm run test",
+  ]) {
+    assert.ok(block.includes(gate), `CLAUDE.md : gate perdu dans le manifeste : ${gate.trim()}`);
+  }
+});
+
+test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-cases", () => {
+  const roadmap = readRepoFile("ROADMAP.md");
+  assert.ok(!roadmap.includes("infrastructure/with-metrics.ts"), "ROADMAP.md : ancien emplacement infrastructure/with-metrics.ts");
+  const lines = splitLines(roadmap);
+  const llm = lines.indexOf("  llm/");
+  const context = lines.indexOf("  context/");
+  assert.ok(llm !== -1 && context > llm, "ROADMAP.md : sous-arbres llm/ puis context/ introuvables");
+  assert.ok(!lines.slice(llm, context).some((line) => line.includes("with-metrics")), "ROADMAP.md : with-metrics encore sous llm/");
+  const metrics = lines.indexOf("  metrics/");
+  const voice = lines.findIndex((line, index) => index > metrics && line.startsWith("  voice/"));
+  assert.ok(metrics !== -1 && voice !== -1, "ROADMAP.md : sous-arbres metrics/ puis voice/ introuvables");
+  assert.ok(
+    lines.slice(metrics, voice).some((line) => line.includes("application/use-cases/with-metrics.ts") && line.includes("withMetrics")),
+    "ROADMAP.md : withMetrics absent de metrics/application/use-cases/",
+  );
+  assert.ok(
+    existsSync(new URL("../src/metrics/application/use-cases/with-metrics.ts", import.meta.url)),
+    "src/metrics/application/use-cases/with-metrics.ts introuvable",
+  );
 });

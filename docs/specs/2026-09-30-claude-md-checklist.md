@@ -1,0 +1,35 @@
+# Checklist · docs(claude-md): corriger le compte des ADR, retirer les clés DEV-xxx et déclarer la langue des documents · #7
+
+Issue : https://github.com/arthurolivierfortin/agent-core/issues/7
+Spécification : docs/specs/2026-09-30-claude-md-design.md
+
+## Livrables
+- [x] [SPEC-1] Remplacer dans `CLAUDE.md` la chaîne `(ADR-AGENT-0001 à 0021)` par `(ADR-AGENT-0001 à 0020)`, le reste de la ligne restant identique — fichier attendu : CLAUDE.md
+- [x] [SPEC-2] Remplacer dans `CLAUDE.md` la chaîne « Les clés `DEV-xxx` citées dans les ADR et le ROADMAP renvoient » par « Les clés `DEV-xxx` citées dans les ADR renvoient », en gardant le reste du paragraphe Origine, dont `feat/DEV-197-test-harness`, à l'identique — fichier attendu : CLAUDE.md
+- [x] [SPEC-3] Remplacer dans le bloc `<!-- core-project` de `CLAUDE.md` la ligne `derogations: []` par les quatre lignes `derogations:`, `  - rule: core/langue`, `    reason: "<phrase exacte de la décision D2 de la spécification>"` et `    revue_le: 2026-12-31`, toutes les autres lignes du bloc restant identiques — fichier attendu : CLAUDE.md
+- [x] [SPEC-4] Dans la carte « Full tree » de `ROADMAP.md`, supprimer la ligne `    infrastructure/with-metrics.ts     withMetrics (LLMProvider → MetricsCollector decorator)` du sous-arbre `  llm/` et insérer la ligne `    application/use-cases/with-metrics.ts   withMetrics (LLMProvider → MetricsCollector decorator)` dans le sous-arbre `  metrics/`, juste après la ligne `    services/aggregate.ts        pure: records → MetricsTotal (with RateTable)` — fichier attendu : ROADMAP.md
+
+## Tests
+- [x] [TEST-1] Cas `TEST-1 (issue 7) CLAUDE.md cite l'intervalle exact des ADR` : les noms de `docs/decisions/` qui correspondent à `/^ADR-AGENT-(\d{4})-.+\.md$/` sont au nombre de N, leurs numéros sont exactement 1 à N sans trou, et `CLAUDE.md` contient une seule fois la chaîne `(ADR-AGENT-0001 à `, suivie de N écrit sur quatre chiffres puis de `)` (exerce SPEC-1) — fichier attendu : scripts/repo-conventions.test.mjs
+- [x] [TEST-2] Cas `TEST-2 (issue 7) CLAUDE.md ne rapporte les clés DEV-xxx qu'aux ADR` : la ligne de `CLAUDE.md` qui contient `` `DEV-xxx` `` contient `citées dans les ADR renvoient` et ne contient pas `ROADMAP` ; `CLAUDE.md` contient toujours `feat/DEV-197-test-harness` ; `ROADMAP.md` ne contient ni `DEV-xxx` ni une correspondance de `/\bDEV-\d+\b/` ; au moins un fichier `docs/decisions/ADR-AGENT-*.md` contient une correspondance de `/\bDEV-\d+\b/` (exerce SPEC-2) — fichier attendu : scripts/repo-conventions.test.mjs
+- [x] [TEST-3] Cas `TEST-3 (issue 7) le manifeste déclare la dérogation de langue` : dans les lignes de `CLAUDE.md` comprises entre `<!-- core-project` et `-->`, aucune ligne n'est `derogations: []` ; la ligne `derogations:` est suivie immédiatement de `  - rule: core/langue`, puis d'une ligne qui commence par `    reason: "`, finit par `"`, ne contient aucun autre guillemet double ni deux espaces consécutifs après l'indentation, et contient `anglais`, `français`, `README.md`, `ROADMAP.md`, `docs/guide-agent-package.md`, `docs/decisions/`, `docs/plans/2026-07-21-v1-decoupage-pr.md` et `#7`, puis de `    revue_le: 2026-12-31` ; les lignes `  - id: GATE-1  name: build  cmd: npm run build`, `  - id: GATE-2  name: typecheck  cmd: npm run typecheck` et `  - id: GATE-3  name: test  cmd: npm run test` sont toujours présentes (exerce SPEC-3) — fichier attendu : scripts/repo-conventions.test.mjs
+- [x] [TEST-4] Cas `TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-cases` : `ROADMAP.md` ne contient pas `infrastructure/with-metrics.ts` ; les lignes comprises entre la première ligne égale à `  llm/` et la première ligne égale à `  context/` ne contiennent pas `with-metrics` ; les lignes comprises entre la première ligne égale à `  metrics/` et la première ligne suivante qui commence par `  voice/` contiennent une ligne qui contient à la fois `application/use-cases/with-metrics.ts` et `withMetrics` ; le fichier `src/metrics/application/use-cases/with-metrics.ts` existe (`existsSync`, sans l'ouvrir) (exerce SPEC-4) — fichier attendu : scripts/repo-conventions.test.mjs
+
+## Base de données
+(aucune)
+
+## Vérifications
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
+
+## Hypothèses
+- [H] **H1 (R1 de la spécification).** Le socle déclare `core` non dérogeable (`dev-kit/conventions/core.md`, tableau de `dev-kit/conventions/derogations.md`) alors que le même `core.md` dit que tout écart est déclaré dans `derogations`. La dérogation `core/langue` est écrite telle qu'Arthur l'a confirmée le 2026-09-30 ; la contradiction est signalée au juge, sans changer la décision. Suivi recommandé hors de cette PR : dans `dev-kit`, rendre le point de langue dérogeable ou consigner l'exception.
+- [H] **H2.** TEST-2 lit « la ligne de `CLAUDE.md` qui contient `` `DEV-xxx` `` » comme une ligne unique : il exige qu'exactement une ligne cite `` `DEV-xxx` `` (vrai aujourd'hui : ligne 20).
+- [H] **H3.** TEST-3 borne le manifeste entre la ligne égale à `<!-- core-project` et la première ligne égale à `-->` du fichier (le bloc est en tête de `CLAUDE.md`, lignes 1 à 14).
+- [H] **H4.** La ligne ajoutée à `ROADMAP.md` est en anglais, comme le reste du document hérité : couvert par « mises à jour comprises » de la dérogation (D2).
+- [H] **H5.** Les sujets de commit sont ceux de D6, à l'infinitif (forme de l'historique du dépôt : `exporter`, `résumer`), sans `Co-Authored-By` (D6).
+- [H] **H6 (R2 de la spécification levée).** Les commentaires de #7 ont été relus par le researcher (`gh issue view 7 --comments`, 2026-09-30) : ils confirment les trois corrections et l'ajout de `ROADMAP.md:139`, sans autre élément de périmètre.
+- [H] **H7.** L'outil Edit peut écrire des fins de ligne LF dans une copie de travail en CRLF ; sans effet sur l'index (`core.autocrlf=true` normalise en LF), vérifié en tâche 5 par `git ls-files --eol`.
+- [H] **H8.** Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1, et un cinquième commit `chore(checklist)` coche les gates et consigne les hypothèses : même pratique que le plan de #9 (`docs/plans/2026-09-30-csv-rejeu-demo-plan.md`) ; D6 (« un SPEC = un commit ») reste respecté pour les quatre livrables.
+- [H] **H9 (ajustement du builder, consigne du pilote).** Le compte des ADR suit main 85771db (#21), fusionnée dans la branche par `git merge origin/main` après le commit de SPEC-1 : `docs/decisions/` compte 21 ADR, `ADR-AGENT-0001` à `0020` copiés de NATHAN et `ADR-AGENT-0021` natif du dépôt. `CLAUDE.md` cite « (ADR-AGENT-0001 à 0020 copiés de NATHAN, 0021 natif du dépôt) » au lieu de « (ADR-AGENT-0001 à 0020) » prévu par SPEC-1 ; TEST-1 (issue 7) lit le nombre d'ADR copiés dans la note d'origine de `docs/decisions/README.md` (inchangée), le total dans la liste des fichiers, et exige cette formule. Correction par un commit `docs(claude-md)` séparé ; le compte reste exact, dans le périmètre approuvé par Arthur (« le compte des ADR exact »).
