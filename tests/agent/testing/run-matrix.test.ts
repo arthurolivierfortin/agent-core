@@ -1,0 +1,215 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { defineAgent } from "../../../dist/agent/index.js";
+import type { AgentDeps } from "../../../dist/agent/index.js";
+import { defineScenario, fakeApp } from "../../../dist/agent/testing/index.js";
+import type { FakeApp, FakeAppState } from "../../../dist/agent/testing/index.js";
+import { runMatrix } from "../../../dist/agent/testing/run-matrix.js";
+import type { MatrixOptions } from "../../../dist/agent/testing/run-matrix.js";
+import { HeuristicTokenCounter, SlidingWindowStrategy } from "../../../dist/context/index.js";
+import { LLMError } from "../../../dist/llm/index.js";
+import type { LLMProvider, LLMResponse, Usage } from "../../../dist/llm/index.js";
+import { FakeLLMProvider } from "../../../dist/testing/index.js";
+
+type Wiring = Omit<AgentDeps, "tools">;
+type Options = MatrixOptions<FakeAppState, Record<string, readonly unknown[]>>;
+
+const PAGES = ["accueil", "reglages", "profil"];
+const USAGE: Usage = { tokensIn: 500_000, tokensOut: 250_000 };
+const RATE = { usdPerMillionTokensIn: 2, usdPerMillionTokensOut: 8 };
+
+const app = (): FakeApp => fakeApp({ pages: PAGES, current: "accueil" });
+const text = (content: string, usage?: Usage): LLMResponse => ({ content, toolCalls: [], usage });
+const call = (name: string, args: Record<string, unknown>, usage?: Usage): LLMResponse => ({
+  content: "",
+  toolCalls: [{ id: `call-${name}`, name, arguments: args }],
+  usage,
+});
+const navigate = (usage?: Usage): LLMResponse => call("navigate", { page: "reglages" }, usage);
+
+function scenario(name: string, target: string, env: () => FakeApp = app) {
+  const expect = { finalState: (state: FakeAppState) => state.current === target };
+  return defineScenario({ name, env, input: `amene-moi a la page ${target}`, expect });
+}
+
+function wiring(llm: LLMProvider, extra: Partial<Wiring> = {}): Wiring {
+  const agent = defineAgent({ name: "navigateur", prompt: "Tu aides a naviguer.", tools: [] });
+  const context = new SlidingWindowStrategy({ maxTokens: 100_000, counter: new HeuristicTokenCounter() });
+  return { agent, llm, context, ...extra };
+}
+
+/** A `deps` that hands every run a fresh fake, scripted with `responses`. */
+const script = (...responses: LLMResponse[]) => () => wiring(new FakeLLMProvider({ responses }));
+
+/** « aller aux reglages », no axis, one run, scripted to succeed, unless `options` says otherwise. */
+function matrix(options: Partial<Options>) {
+  const scenarios = [scenario("aller aux reglages", "reglages")];
+  const deps = script(navigate(), text("tu y es"));
+  return runMatrix<FakeAppState, Options["axes"]>({ scenarios, axes: {}, runs: 1, deps, ...options });
+}
+
+/** Hands out `values` in order, then throws: a test can tell exactly how often it was read. */
+function scriptedClock(values: number[]): () => number {
+  let readings = 0;
+  return () => {
+    if (readings === values.length) throw new Error(`scripted clock exhausted after ${readings} readings`);
+    return values[readings++];
+  };
+}
+
+test("runMatrix runs every scenario on every combination, runs times, in order; no axis is one combination", async () => {
+  const envCalls = { reglages: 0, profil: 0 };
+  const counted = (page: "reglages" | "profil") => () => { envCalls[page]++; return app(); };
+  const seen: object[] = [];
+  const before: (number | undefined)[] = [];
+  let previous: FakeLLMProvider | undefined;
+
+  const { runs } = await runMatrix({
+    scenarios: [
+      scenario("aller aux reglages", "reglages", counted("reglages")),
+      scenario("aller au profil", "profil", counted("profil")),
+    ],
+    axes: { model: ["a", "b"], memory: [8, 20] },
+    runs: 2,
+    deps: (combination) => {
+      const model: string = combination.model;
+      const memory: number = combination.memory;
+      // @ts-expect-error `temperature` is not one of the axes.
+      void [model, memory, combination.temperature];
+      seen.push(combination);
+      before.push(previous?.calls.length);
+      previous = new FakeLLMProvider({ responses: [navigate(), text("tu y es")] });
+      return wiring(previous);
+    },
+  });
+
+  const expected = ["aller aux reglages", "aller au profil"].flatMap((name) =>
+    ["a|8", "a|20", "b|8", "b|20"].flatMap((values) => [`${name}|${values}|1`, `${name}|${values}|2`]),
+  );
+  assert.deepEqual(runs.map((r) => `${r.scenario}|${r.combination.model}|${r.combination.memory}|${r.run}`), expected);
+  const failed = ["finalState: predicate returned false"];
+  assert.deepEqual(runs.map((r) => [r.passed, r.failures]), [...Array(8).fill([true, []]), ...Array(8).fill([false, failed])]);
+  assert.equal(seen.length, 16);
+  runs.forEach((r, i) => assert.equal(seen[i], r.combination));
+  assert.deepEqual(before, [undefined, ...Array(15).fill(2)]);
+  assert.deepEqual(envCalls, { reglages: 8, profil: 8 });
+
+  const empty: object[] = [];
+  const alone = await matrix({ deps: (combination) => { empty.push(combination); return script(text("ok"))(); } });
+  assert.deepEqual(alone.runs.map((r) => r.combination), [{}]);
+  assert.deepEqual(empty, [{}]);
+});
+
+test("runMatrix refuses options that would yield an empty or truncated report, before any run", async () => {
+  const cases: [Partial<Options>, string][] = [
+    [{ runs: 0 }, "runMatrix: runs must be an integer >= 1, got 0"],
+    [{ runs: 1.5 }, "runMatrix: runs must be an integer >= 1, got 1.5"],
+    [{ runs: NaN }, "runMatrix: runs must be an integer >= 1, got NaN"],
+    [{ scenarios: [] }, "runMatrix: scenarios must not be empty"],
+    [{ axes: { model: ["a"], memory: [] } }, "runMatrix: axis 'memory' has no value"],
+  ];
+  for (const [override, message] of cases) {
+    const calls = { deps: 0, env: 0 };
+    const env = () => { calls.env++; return app(); };
+    const deps = () => { calls.deps++; return script(text("ok"))(); };
+    const options = { scenarios: [scenario("aller aux reglages", "reglages", env)], axes: { model: ["a"] }, deps };
+
+    await assert.rejects(matrix({ ...options, ...override }), { name: "RangeError", message });
+    assert.deepEqual(calls, { deps: 0, env: 0 }, message);
+  }
+});
+
+test("runMatrix measures each run's duration, tokens and cost on the injected clock", async () => {
+  const clock = scriptedClock([1000, 1010, 1030, 1040, 1100, 1500]);
+  const deps = script(navigate(USAGE), text("tu y es", USAGE));
+  const [run] = (await matrix({ deps, rates: { "fake-model": RATE }, now: clock })).runs;
+
+  assert.deepEqual([run.durationMs, run.tokensUsed, run.costUsd], [500, 1_500_000, 6]);
+  assert.throws(clock, /scripted clock exhausted after 6 readings/);
+});
+
+test("runMatrix reports null, never 0, for a missing usage or rate, with a fresh collector per run", async () => {
+  const measure = async (usage: Usage | undefined, options: Partial<Options>) => {
+    const { runs } = await matrix({ deps: script(navigate(usage), text("tu y es", usage)), ...options });
+    return runs.map((r) => [r.tokensUsed, r.costUsd]);
+  };
+
+  assert.deepEqual(await measure(undefined, { rates: { "fake-model": RATE } }), [[null, null]]);
+  assert.deepEqual(await measure(USAGE, { runs: 2 }), [[1_500_000, null], [1_500_000, null]]);
+  assert.deepEqual(await measure(USAGE, { rates: { "other-model": RATE } }), [[1_500_000, null]]);
+});
+
+test("runMatrix measures on Date.now when no clock is given", async (t) => {
+  const dateNow = t.mock.method(Date, "now", scriptedClock([100, 110, 150, 400]));
+  const deps = () => wiring(new FakeLLMProvider({ responses: [text("tu y es")] }), { now: () => 0 });
+  const [run] = (await matrix({ deps })).runs;
+
+  assert.equal(run.durationMs, 300);
+  assert.equal(dateNow.mock.callCount(), 4);
+});
+
+test("runMatrix keeps each run's trace: the very responses, the dispatched calls, the final state", async () => {
+  const created: FakeApp[] = [];
+  const env = () => { const made = app(); created.push(made); return made; };
+  const [r1, r2] = [navigate(), text("tu y es")];
+  const { trace } = (await matrix({ scenarios: [scenario("aller aux reglages", "reglages", env)], deps: script(r1, r2) })).runs[0];
+
+  assert.equal(trace.responses.length, 2);
+  [r1, r2].forEach((response, i) => assert.equal(trace.responses[i], response));
+  assert.deepEqual(trace.toolCalls, r1.toolCalls);
+  assert.equal(trace.finalState, created[0].state);
+  assert.deepEqual([trace.finalState?.current, trace.stopReason, trace.content], ["reglages", "completed", "tu y es"]);
+});
+
+test("a landing's calls are in the trace's responses, not in its dispatched toolCalls", async () => {
+  const fake = () => new FakeLLMProvider({ responses: [navigate(), call("getCurrentPage", {})] });
+  const { trace } = (await matrix({ deps: () => wiring(fake(), { budget: { maxIterations: 1 } }) })).runs[0];
+
+  assert.equal(trace.stopReason, "budget");
+  assert.equal(trace.responses.length, 2);
+  assert.deepEqual(trace.toolCalls.map((c) => c.name), ["navigate"]);
+});
+
+test("a provider that rejects mid-run fails that run with a partial trace, and the matrix goes on", async () => {
+  const r1 = navigate(USAGE);
+  let completions = 0;
+  const failing: LLMProvider = {
+    id: "literal",
+    supportsStreaming: () => false,
+    models: () => [{ id: "m-a", supportsTools: true }],
+    complete: async () => {
+      if (++completions === 1) return r1;
+      throw new LLMError("API_ERROR", "provider down");
+    },
+  };
+  let wirings = 0;
+  let t = 0;
+  const deps = () => (++wirings === 1 ? wiring(failing) : script(navigate(), text("tu y es"))());
+  const [first, second] = (await matrix({ runs: 2, deps, rates: { "m-a": RATE }, now: () => (t += 10) })).runs;
+
+  const { trace, ...measured } = first;
+  assert.deepEqual(measured, {
+    scenario: "aller aux reglages", combination: {}, run: 1, passed: false, failures: [],
+    error: "provider down", durationMs: 40, tokensUsed: 750_000, costUsd: 3,
+  });
+  const finalState = { pages: PAGES, current: "reglages" };
+  assert.deepEqual(trace, { toolCalls: r1.toolCalls, finalState, stopReason: null, content: null, responses: [r1] });
+  assert.equal(trace.responses[0], r1);
+  assert.deepEqual([second.passed, second.error], [true, null]);
+});
+
+test("a deps or an env that throws becomes that run's error, with what was recorded before", async () => {
+  let envCalls = 0;
+  const counted = [scenario("aller aux reglages", "reglages", () => { envCalls++; return app(); })];
+  const [lost] = (await matrix({ scenarios: counted, deps: () => { throw "no wiring"; } })).runs;
+  const { finalState, responses, toolCalls } = lost.trace;
+  assert.deepEqual(
+    [lost.error, finalState, responses, toolCalls, lost.tokensUsed, lost.costUsd, envCalls],
+    ["no wiring", null, [], [], 0, null, 0],
+  );
+
+  const provider = new FakeLLMProvider({ responses: [text("tu y es")] });
+  const broken = [scenario("aller aux reglages", "reglages", () => { throw new Error("env broke"); })];
+  const [run] = (await matrix({ scenarios: broken, deps: () => wiring(provider) })).runs;
+  assert.deepEqual([run.error, run.trace.finalState, run.trace.responses, provider.calls.length], ["env broke", null, [], 0]);
+});

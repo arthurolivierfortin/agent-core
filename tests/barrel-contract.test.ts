@@ -26,6 +26,7 @@ import type {
   ToolResult,
   UsageRecord,
 } from "@arthurolivierfortin/agent-core";
+import type { FakeAppState, MatrixOptions, MatrixReport, MatrixRun, MatrixTrace } from "@arthurolivierfortin/agent-core/testing";
 
 test("`.` exposes the engine surface", () => {
   for (const name of ["LLMError", "OllamaLLMProvider", "PROVIDERS", "resolveProvider", "DEFAULT_OLLAMA_MODEL"]) {
@@ -56,6 +57,7 @@ test("`./testing` exposes the scenario harness", () => {
   assert.equal(typeof testing.fakeApp, "function");
   assert.equal(typeof testing.defineScenario, "function");
   assert.equal(typeof testing.runScenario, "function");
+  assert.equal(typeof testing.runMatrix, "function");
 });
 
 test("`.` and `./llm` do not leak the testing surface", () => {
@@ -66,6 +68,7 @@ test("`.` and `./llm` do not leak the testing surface", () => {
     assert.equal(surface.fakeApp, undefined);
     assert.equal(surface.defineScenario, undefined);
     assert.equal(surface.runScenario, undefined);
+    assert.equal(surface.runMatrix, undefined);
   }
 });
 
@@ -239,4 +242,28 @@ test("`.` exposes withMetrics, and what it returns is still an LLMProvider", asy
   });
 
   assert.equal(collector.records().length, 1);
+});
+
+// Same reasoning as the type tests above: the matrix's types annotate what `testing.runMatrix`
+// itself consumed or produced, and the gate that enforces it is `npm run typecheck`.
+test("`./testing` exposes runMatrix and the types of its options and report", async () => {
+  const env = () => testing.fakeApp({ pages: ["accueil"], current: "accueil" });
+  const options: MatrixOptions<FakeAppState, { model: string[] }> = {
+    scenarios: [testing.defineScenario({ name: "rester a l'accueil", env, input: "bonjour", expect: {} })],
+    axes: { model: [testing.FakeLLMProvider.MODEL_ID] },
+    runs: 1,
+    deps: (combination) => ({
+      agent: root.defineAgent({ name: "navigateur", prompt: "Tu aides.", tools: [] }),
+      llm: new testing.FakeLLMProvider({ responses: [{ content: "bonjour", toolCalls: [] }] }),
+      context: new root.SlidingWindowStrategy({ maxTokens: 1_000, counter: new root.HeuristicTokenCounter() }),
+      model: combination.model,
+    }),
+  };
+
+  const report: MatrixReport<FakeAppState, { model: string[] }> = await testing.runMatrix(options);
+  const run: MatrixRun<FakeAppState, { model: string[] }> = report.runs[0];
+  const trace: MatrixTrace<FakeAppState> = run.trace;
+
+  assert.equal(run.passed, true);
+  assert.equal(trace.stopReason, "completed");
 });
