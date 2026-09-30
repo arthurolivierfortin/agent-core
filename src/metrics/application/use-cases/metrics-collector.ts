@@ -1,4 +1,5 @@
-import type { UsageRecord } from "../../models/index.js";
+import { aggregate } from "../../services/aggregate.js";
+import type { MetricsTotal, RateTable, UsageRecord } from "../../models/index.js";
 
 /**
  * Collects the records of provider calls, for one run or one batch of runs: the scope is the
@@ -19,5 +20,13 @@ export class MetricsCollector {
   /** A new array of copies on every call, in recording order. */
   records(): UsageRecord[] {
     return this.entries.map((entry) => ({ ...entry }));
+  }
+
+  /**
+   * What this collector's records add up to, priced from `rates` when given. The arithmetic is
+   * `aggregate`'s alone, so the collector and the pure function can never disagree.
+   */
+  total(rates?: RateTable): MetricsTotal {
+    return aggregate(this.entries, rates);
   }
 }

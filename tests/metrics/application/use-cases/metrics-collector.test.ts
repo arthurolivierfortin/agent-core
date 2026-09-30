@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MetricsCollector } from "../../../../dist/metrics/index.js";
-import type { UsageRecord } from "../../../../dist/metrics/index.js";
+import { MetricsCollector, aggregate } from "../../../../dist/metrics/index.js";
+import type { RateTable, UsageRecord } from "../../../../dist/metrics/index.js";
 
 // A fresh object on each call, so no test can leak a mutation into another.
 function recordA(): UsageRecord {
@@ -50,4 +50,33 @@ test("two collectors share nothing", () => {
   used.record(recordA());
 
   assert.deepEqual(untouched.records(), []);
+});
+
+// recordA costs 3 $ and recordB 2 $ at these rates.
+const rates: RateTable = {
+  "m-a": { usdPerMillionTokensIn: 2, usdPerMillionTokensOut: 8 },
+  "m-b": { usdPerMillionTokensIn: 1, usdPerMillionTokensOut: 1 },
+  "m-local": null,
+};
+
+test("a new collector totals to zero calls and no cost", () => {
+  assert.deepEqual(new MetricsCollector().total(), {
+    calls: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    durationMs: 0,
+    costUsd: null,
+  });
+});
+
+test("total() is aggregate() over the collector's own records", () => {
+  const collector = new MetricsCollector();
+  collector.record(recordA());
+  collector.record(recordB());
+
+  const priced = collector.total(rates);
+
+  assert.deepEqual(collector.total(), aggregate(collector.records()));
+  assert.deepEqual(priced, aggregate(collector.records(), rates));
+  assert.strictEqual(priced.costUsd, 5);
 });
