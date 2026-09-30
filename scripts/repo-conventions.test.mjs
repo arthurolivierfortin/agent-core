@@ -312,3 +312,53 @@ test("TEST-3 (issue 26) le test d'intégration Gemini est ignoré sans GEMINI_IN
   }
   assert.doesNotMatch(source, GOOGLE_KEY_SHAPE);
 });
+
+// Ce que la section Gemini du README et celle du guide disent toutes deux, mot pour mot.
+const GEMINI_DOC_EXPECTED = [
+  "`GEMINI_API_KEY`",
+  "`apiKeyVar`",
+  "`[redacted]`",
+  "`GEMINI_MODEL`",
+  "`gemini-2.5-flash`",
+  "`supportsStreaming()`",
+  "`https://generativelanguage.googleapis.com`",
+  "Do not pass `/v1beta`: the provider appends it.",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "H7",
+  "H8",
+  "Launching it is a manual step: no test suite and no agent loop runs it.",
+  "`GEMINI_INTEGRATION=1`",
+  "`checkProviderContract`",
+  "#20",
+  'npm run build; if ($LASTEXITCODE -eq 0) { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts; Remove-Item Env:GEMINI_INTEGRATION }',
+  "npm run build && GEMINI_INTEGRATION=1 node --test tests/integration/gemini.integration.test.ts",
+];
+
+test("TEST-4 (issue 26) le README documente Gemini et corrige ses lignes de surface", () => {
+  const readme = readRepoFile("README.md");
+  const section = sectionAfterHeading(readme, "## Setting up Gemini");
+  for (const text of GEMINI_DOC_EXPECTED) assert.ok(section.includes(text), `README : section Gemini sans ${text}`);
+  assert.ok(!section.includes(String.fromCharCode(0x2014)), "README : tiret cadratin dans la section Gemini");
+  const lines = splitLines(readme);
+  const llmEntry = lines.find((line) => line.startsWith("| `./llm` |")) ?? "";
+  assert.ok(llmEntry.includes("GeminiLLMProvider"), "README : ligne ./llm sans GeminiLLMProvider");
+  const engine = lines.find((line) => line.startsWith("- **Engine**:")) ?? "";
+  for (const name of ["GeminiLLMProvider", "GeminiConfig", "DEFAULT_GEMINI_MODEL"]) {
+    assert.ok(engine.includes(name), `README : puce Engine sans ${name}`);
+  }
+  const llmLayer = sectionAfterHeading(readme, "## Using the LLM layer (`./llm`)");
+  for (const text of ["GeminiLLMProvider", "PROVIDERS.gemini()"]) {
+    assert.ok(llmLayer.includes(text), `README : section ./llm sans ${text}`);
+  }
+  const configuration = sectionAfterHeading(readme, "## Configuration");
+  for (const text of ["`GEMINI_API_KEY`", "`GEMINI_MODEL`", "`apiKeyVar`", "(#setting-up-gemini)"]) {
+    assert.ok(configuration.includes(text), `README : section Configuration sans ${text}`);
+  }
+  assert.ok(!readme.includes("The variables the LLM layer reads today are"), "README : phrase des variables d'avant Gemini");
+  assert.doesNotMatch(readme, GOOGLE_KEY_SHAPE);
+});
