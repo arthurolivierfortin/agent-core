@@ -117,3 +117,38 @@ test("TEST-4 (issue 35) two calls launched together reach the provider one after
   assert.equal(double.count(), 1);
   assert.equal(guard.refused(), 1);
 });
+
+const cutMessage = (model: string, reason: string) =>
+  `capGuard refused a call to '${model}': the matrix is cut (${reason})`;
+
+const UNPRICED_TABLES: ReadonlyArray<readonly [string, RateTable]> = [
+  ["no entry", {}],
+  ["a null rate", { [MODEL]: null }],
+  ["an input price of 0", { [MODEL]: { ...HOSTED_RATE, usdPerMillionTokensIn: 0 } }],
+  ["an output price of 0", { [MODEL]: { ...HOSTED_RATE, usdPerMillionTokensOut: 0 } }],
+  ["a price of -1", { [MODEL]: { ...HOSTED_RATE, usdPerMillionTokensIn: -1 } }],
+  ["a NaN price", { [MODEL]: { ...HOSTED_RATE, usdPerMillionTokensOut: NaN } }],
+];
+
+for (const [title, rates] of UNPRICED_TABLES) {
+  test(`TEST-5 (issue 35) ${title} cuts the matrix before the provider is called (unpriced_model)`, async () => {
+    const double = scripted([PRICED]);
+    const guard = capGuard(double.provider, rates, 10);
+    await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unpriced_model") });
+    assert.equal(double.count(), 0);
+    assert.equal(guard.cutReason(), "unpriced_model");
+    assert.equal(guard.refused(), 1);
+    assert.equal(guard.spentUsd(), 0);
+  });
+}
+
+test("TEST-5 (issue 35) once cut on an unpriced model, a call to a priced model is refused too", async () => {
+  const double = scripted([PRICED]);
+  const guard = capGuard(double.provider, { [MODEL]: null, "priced-model": HOSTED_RATE }, 10);
+  await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unpriced_model") });
+  const priced = { message: cutMessage("priced-model", "unpriced_model") };
+  await assert.rejects(guard.complete(HI, { model: "priced-model" }), priced);
+  assert.equal(double.count(), 0);
+  assert.equal(guard.refused(), 2);
+  assert.equal(guard.cutReason(), "unpriced_model");
+});
