@@ -146,3 +146,25 @@ test("runMatrix measures on Date.now when no clock is given", async (t) => {
   assert.equal(run.durationMs, 300);
   assert.equal(dateNow.mock.callCount(), 4);
 });
+
+test("runMatrix keeps each run's trace: the very responses, the dispatched calls, the final state", async () => {
+  const created: FakeApp[] = [];
+  const env = () => { const made = app(); created.push(made); return made; };
+  const [r1, r2] = [navigate(), text("tu y es")];
+  const { trace } = (await matrix({ scenarios: [scenario("aller aux reglages", "reglages", env)], deps: script(r1, r2) })).runs[0];
+
+  assert.equal(trace.responses.length, 2);
+  [r1, r2].forEach((response, i) => assert.equal(trace.responses[i], response));
+  assert.deepEqual(trace.toolCalls, r1.toolCalls);
+  assert.equal(trace.finalState, created[0].state);
+  assert.deepEqual([trace.finalState?.current, trace.stopReason, trace.content], ["reglages", "completed", "tu y es"]);
+});
+
+test("a landing's calls are in the trace's responses, not in its dispatched toolCalls", async () => {
+  const fake = () => new FakeLLMProvider({ responses: [navigate(), call("getCurrentPage", {})] });
+  const { trace } = (await matrix({ deps: () => wiring(fake(), { budget: { maxIterations: 1 } }) })).runs[0];
+
+  assert.equal(trace.stopReason, "budget");
+  assert.equal(trace.responses.length, 2);
+  assert.deepEqual(trace.toolCalls.map((c) => c.name), ["navigate"]);
+});

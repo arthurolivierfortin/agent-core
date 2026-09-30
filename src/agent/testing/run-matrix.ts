@@ -1,7 +1,9 @@
+import type { LLMProvider } from "../../llm/interfaces/index.js";
+import type { LLMResponse, ToolCall } from "../../llm/models/index.js";
 import { MetricsCollector, withMetrics } from "../../metrics/index.js";
 import type { RateTable } from "../../metrics/index.js";
-import type { AgentDeps } from "../application/dtos/index.js";
-import type { Scenario } from "./define-scenario.js";
+import type { AgentDeps, StopReason } from "../application/dtos/index.js";
+import type { Scenario, ScenarioEnv } from "./define-scenario.js";
 import { runScenario } from "./run-scenario.js";
 
 /** One value per axis. Not exported: a consumer names it `MatrixRun<S, A>["combination"]`. */
@@ -22,6 +24,17 @@ export type MatrixOptions<TState, TAxes extends Record<string, readonly unknown[
   readonly now?: () => number;
 };
 
+/** What one run left behind, whether it passed, failed or threw (ADR-AGENT-0006 rule 3). */
+export type MatrixTrace<TState> = {
+  readonly toolCalls: readonly ToolCall[];
+  /** Null, like `stopReason` and `content`, when the run threw before it could be read. */
+  readonly finalState: TState | null;
+  readonly stopReason: StopReason | null;
+  readonly content: string | null;
+  /** Every response the provider resolved, in order, the landing one included: the same objects. */
+  readonly responses: readonly LLMResponse[];
+};
+
 export type MatrixRun<TState, TAxes extends Record<string, readonly unknown[]>> = {
   readonly scenario: string;
   /** The very object `deps` received. */
@@ -34,6 +47,7 @@ export type MatrixRun<TState, TAxes extends Record<string, readonly unknown[]>> 
   /** Null as soon as one call reported no usage: absent is not zero (ADR-AGENT-0007). */
   readonly tokensUsed: number | null;
   readonly costUsd: number | null;
+  readonly trace: MatrixTrace<TState>;
 };
 
 export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]>> = {
@@ -53,6 +67,9 @@ export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]
  * ADR-AGENT-0007's "absent is not zero", and it does not exist for a run that throws, while the
  * collector keeps the calls resolved before the error.
  *
+ * `step.ts` and `runScenario` stay untouched: responses are recorded by wrapping the provider,
+ * the final state by wrapping `env`.
+ *
  * Design: docs/specs/2026-09-30-run-matrix-design.md (#8).
  */
 export async function runMatrix<TState, TAxes extends Record<string, readonly unknown[]>>(
@@ -69,11 +86,16 @@ export async function runMatrix<TState, TAxes extends Record<string, readonly un
 
   const runOne = async (scenario: Scenario<TState>, combination: Combination<TAxes>, run: number) => {
     const collector = new MetricsCollector();
+    const responses: LLMResponse[] = [];
+    let captured: ScenarioEnv<TState> | undefined;
     const startedAt = now();
     const wiring = options.deps(combination);
-    const llm = withMetrics(wiring.llm, collector, now);
-    const result = await runScenario(scenario, { ...wiring, llm });
-    const outcome = { scenario: result.scenario, passed: result.passed, failures: result.failures };
+    const llm = recordResponses(withMetrics(wiring.llm, collector, now), responses);
+    const env = () => { captured = scenario.env(); return captured; };
+    const result = await runScenario({ ...scenario, env }, { ...wiring, llm });
+    const { toolCalls, finalState, stopReason, content, passed, failures } = result;
+    const trace = { toolCalls, finalState, stopReason, content, responses };
+    const outcome = { scenario: result.scenario, passed, failures, trace };
     const durationMs = now() - startedAt;
     const { tokensIn, tokensOut, costUsd } = collector.total(options.rates);
     const tokensUsed = tokensIn === null || tokensOut === null ? null : tokensIn + tokensOut;
@@ -100,4 +122,18 @@ function combinationsOf<TAxes extends Record<string, readonly unknown[]>>(
     combinations = combinations.flatMap((c) => axes[name].map((value) => ({ ...c, [name]: value })));
   }
   return combinations as Combination<TAxes>[];
+}
+
+/** Pushes every response `provider` resolves to `sink`, the same object. Never streams, like `withMetrics`. */
+function recordResponses(provider: LLMProvider, sink: LLMResponse[]): LLMProvider {
+  return {
+    id: provider.id,
+    supportsStreaming: () => false,
+    models: () => provider.models(),
+    complete: async (messages, opts) => {
+      const response = await provider.complete(messages, opts);
+      sink.push(response);
+      return response;
+    },
+  };
 }
