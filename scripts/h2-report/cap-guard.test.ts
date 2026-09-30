@@ -1,0 +1,54 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import type { LLMProvider, LLMResponse, Message, ModelInfo, RateTable } from "../../dist/index.js";
+import { capGuard } from "./cap-guard.ts";
+
+// Cap guard of the H2 report (#35): docs/specs/2026-09-30-cap-guard-design.md.
+// Every provider here is a double: no network, no hosted provider, no key, no environment read.
+// The rates are literals, never data/rates.json: entering a real price there changes no test here.
+
+const MODEL = "hosted-model";
+const HOSTED_RATE = { usdPerMillionTokensIn: 1, usdPerMillionTokensOut: 2 };
+const RATES: RateTable = { [MODEL]: HOSTED_RATE };
+const MODELS: ModelInfo[] = [{ id: MODEL, supportsTools: true }];
+const HI: Message[] = [{ role: "user", content: "hi" }];
+const OPTS = { model: MODEL };
+// 250 000 tokens in at 1 USD and 125 000 out at 2 USD per million: 0.5 USD exactly, so sums compare with equal.
+const PRICED_RESPONSE: LLMResponse = { content: "ok", toolCalls: [], usage: { tokensIn: 250_000, tokensOut: 125_000 } };
+
+type Step = { response: LLMResponse } | { error: unknown };
+const PRICED: Step = { response: PRICED_RESPONSE };
+
+/** A provider double that plays `steps` one per call, then repeats the last one, and counts its calls. */
+function scripted(steps: readonly Step[], streaming = false): { provider: LLMProvider; count: () => number } {
+  let calls = 0;
+  const provider: LLMProvider = {
+    id: "hosted-double",
+    supportsStreaming: () => streaming,
+    models: () => MODELS,
+    complete: async () => {
+      const step = steps[Math.min(calls, steps.length - 1)];
+      calls++;
+      if ("error" in step) throw step.error;
+      return step.response;
+    },
+  };
+  return { provider, count: () => calls };
+}
+
+test("TEST-1 (issue 35) seven own keys, no stream, and each priced call added to spentUsd", async () => {
+  const double = scripted([PRICED], true);
+  const guard = capGuard(double.provider, RATES, 10);
+  const keys = ["complete", "cutReason", "id", "models", "refused", "spentUsd", "supportsStreaming"];
+  assert.deepEqual(Object.keys(guard).sort(), keys);
+  assert.equal(Object.hasOwn(guard, "stream"), false);
+  assert.equal(guard.supportsStreaming(), false);
+  assert.equal(guard.id, "hosted-double");
+  assert.equal(guard.models(), MODELS);
+  assert.deepEqual([guard.spentUsd(), guard.refused(), guard.cutReason()], [0, 0, null]);
+  assert.equal(await guard.complete(HI, OPTS), PRICED_RESPONSE);
+  assert.equal(guard.spentUsd(), 0.5);
+  assert.equal(await guard.complete(HI, OPTS), PRICED_RESPONSE);
+  assert.equal(guard.spentUsd(), 1);
+  assert.equal(double.count(), 2);
+});
