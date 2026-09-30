@@ -97,7 +97,18 @@ export class GeminiLLMProvider implements LLMProvider {
     }
     // Status first: an error body never reaches fromGeminiResponse, whose "no candidate" would mislead.
     if (!res.ok) throw await httpError(res, url, opts.model);
-    return fromGeminiResponse((await res.json()) as GeminiResponse);
+    // Parsed here rather than by res.json(): the excerpt of a bad body is ours, not a V8 fragment (D6).
+    const text = await readBody(res);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new LLMError("API_ERROR", `Gemini ${res.status} response is not JSON: ${excerpt(text)}`);
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new LLMError("API_ERROR", `Gemini ${res.status} response is not a JSON object: ${excerpt(text)}`);
+    }
+    return fromGeminiResponse(parsed as GeminiResponse);
   }
 
   /** First of all: MODEL_NOT_FOUND whatever the environment holds, and never a network call. */

@@ -377,3 +377,21 @@ test("a rejected fetch is an API_ERROR that names the URL, with no chained cause
   assert.equal(Object.hasOwn(error, "cause"), false);
   await expectFailure(rejectingFetch("offline"), "API_ERROR", `Gemini request to ${ENDPOINT} failed: offline`);
 });
+
+test("an ok response whose body is not a JSON object is an API_ERROR that quotes it", async () => {
+  const cases: [string, string][] = [
+    ["not json", "Gemini 200 response is not JSON: not json"],
+    ["null", "Gemini 200 response is not a JSON object: null"],
+    ["42", "Gemini 200 response is not a JSON object: 42"],
+    ["[]", "Gemini 200 response is not a JSON object: []"],
+  ];
+  for (const [body, message] of cases) await expectFailure(respondingFetch(200, body).fetch, "API_ERROR", message);
+});
+
+test("an ok response whose body cannot be read is an API_ERROR with the status", async () => {
+  await expectFailure(
+    unreadableFetch(200, new Error("socket closed")),
+    "API_ERROR",
+    "Gemini 200 response body could not be read: Error: socket closed",
+  );
+});
