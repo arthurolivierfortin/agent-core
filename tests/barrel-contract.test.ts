@@ -12,6 +12,7 @@ import type {
   AgentState,
   Budget,
   CompletionOptions,
+  GeminiConfig,
   LLMProvider,
   MetricsTotal,
   ModelInfo,
@@ -26,10 +27,19 @@ import type {
   ToolResult,
   UsageRecord,
 } from "@arthurolivierfortin/agent-core";
+import type { GeminiConfig as LlmGeminiConfig } from "@arthurolivierfortin/agent-core/llm";
 import type { FakeAppState, MatrixOptions, MatrixReport, MatrixRun, MatrixTrace } from "@arthurolivierfortin/agent-core/testing";
 
 test("`.` exposes the engine surface", () => {
-  for (const name of ["LLMError", "OllamaLLMProvider", "PROVIDERS", "resolveProvider", "DEFAULT_OLLAMA_MODEL"]) {
+  for (const name of [
+    "LLMError",
+    "OllamaLLMProvider",
+    "GeminiLLMProvider",
+    "PROVIDERS",
+    "resolveProvider",
+    "DEFAULT_OLLAMA_MODEL",
+    "DEFAULT_GEMINI_MODEL",
+  ]) {
     assert.equal(typeof (root as Record<string, unknown>)[name] !== "undefined", true, `missing ${name}`);
   }
 });
@@ -37,7 +47,9 @@ test("`.` exposes the engine surface", () => {
 test("`./llm` exposes the llm layer standalone (incl. core types at runtime it re-exports value symbols)", () => {
   assert.equal(typeof llm.LLMError, "function");
   assert.equal(typeof llm.OllamaLLMProvider, "function");
+  assert.equal(typeof llm.GeminiLLMProvider, "function");
   assert.equal(typeof llm.PROVIDERS, "object");
+  assert.equal(llm.DEFAULT_GEMINI_MODEL, "gemini-2.5-flash");
 });
 
 // The fourth branch of the exports map, and the one the other three tests left unlocked. A
@@ -268,4 +280,33 @@ test("`./testing` exposes runMatrix and the types of its options and report", as
 
   assert.equal(run.passed, true);
   assert.equal(trace.stopReason, "completed");
+});
+
+// The generateContent translation (#18) stays internal: only the provider class and its
+// configuration leave the barrels, by name, never through an `export *` from gemini/.
+test("`.` and `./llm` serve no Gemini wire symbol", () => {
+  for (const barrel of [root, llm]) {
+    const surface = barrel as Record<string, unknown>;
+    assert.equal(surface.toGeminiRequest, undefined);
+    assert.equal(surface.fromGeminiResponse, undefined);
+    assert.equal(surface.geminiGenerateContentUrl, undefined);
+    assert.equal(surface.GEMINI_DEFAULT_BASE_URL, undefined);
+  }
+});
+
+// Same reasoning as the type tests above: GeminiConfig is a type, so `node --test` cannot see it
+// leave either barrel. It annotates the configuration handed to the class each barrel serves, and
+// the gate that enforces it is `npm run typecheck`. No complete() call, so no network.
+test("`.` and `./llm` expose GeminiLLMProvider and the GeminiConfig it takes", () => {
+  const config: GeminiConfig = {
+    models: [{ id: root.DEFAULT_GEMINI_MODEL, supportsTools: true }],
+    apiKeyVar: "AGENT_CORE_TEST_GEMINI_KEY",
+  };
+  const provider: LLMProvider = new root.GeminiLLMProvider(config);
+  const fromLlm: LlmGeminiConfig = config;
+
+  assert.equal(new llm.GeminiLLMProvider(fromLlm).id, "gemini");
+  assert.equal(provider.id, "gemini");
+  assert.deepEqual(provider.models(), config.models);
+  assert.equal(provider.supportsStreaming(), false);
 });

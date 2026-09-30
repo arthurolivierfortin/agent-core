@@ -3,7 +3,7 @@
 // Transport errors (#25): docs/specs/2026-09-30-gemini-errors-design.md. No LLMError of this module
 // chains a cause, and an external string (body, exception) enters a message only with the key
 // redacted first, then as a bounded excerpt, so that a cut never leaves a prefix of the key (D3).
-// The registry and the barrel exports belong to #26, so no barrel serves this module yet.
+// Served by ./llm and . through src/llm/providers/index.ts, which re-exports GeminiLLMProvider and GeminiConfig only.
 //
 // Hypotheses not yet verified against the real API, each locked by a test on a fetch double in
 // tests/llm/providers/gemini/gemini-llm-provider.test.ts:
@@ -25,7 +25,7 @@ import {
 } from "./gemini-wire.js";
 import type { GeminiResponse } from "./gemini-wire.js";
 
-/** The variable read when the configuration names none. Not exported: the public surface is #26's. */
+/** The variable read when the configuration names none. Not exported: GeminiConfig.apiKeyVar documents it. */
 const DEFAULT_API_KEY_VAR = "GEMINI_API_KEY";
 /** Longest external string a message quotes: a Gemini error sentence fits, an HTML page is cut (D3). */
 const MAX_EXCERPT_LENGTH = 200;

@@ -5,6 +5,8 @@ import type { LLMProvider } from "../interfaces/index.js";
 
 export { OllamaLLMProvider } from "./ollama/ollama-llm-provider.js";
 export type { OllamaConfig } from "./ollama/ollama-llm-provider.js";
+export { GeminiLLMProvider } from "./gemini/gemini-llm-provider.js";
+export type { GeminiConfig } from "./gemini/gemini-llm-provider.js";
 
 /**
  * Closed, typed union of the provider ids this package ships (CLAUDE.md: a string key must
