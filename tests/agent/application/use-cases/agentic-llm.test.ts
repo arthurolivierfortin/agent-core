@@ -98,6 +98,34 @@ test("run drives a tool round trip to its answer", async () => {
   ]);
 });
 
+test("run reports the tokens the provider counted over the whole run", async () => {
+  const navigate = navigateTool();
+  const agent = new AgenticLLM(
+    depsFor(
+      [
+        {
+          ...callResponse("call-1", "navigate", { page: "reglages" }),
+          usage: { tokensIn: 7, tokensOut: 5 },
+        },
+        { ...textResponse("tu y es"), usage: { tokensIn: 3, tokensOut: 2 } },
+      ],
+      [navigate],
+    ),
+  );
+
+  const result = await agent.run("amene-moi aux reglages");
+
+  assert.equal(result.tokensUsed, 17);
+});
+
+test("run reports zero tokens against a provider that reports no usage", async () => {
+  const agent = new AgenticLLM(depsFor([textResponse("tu es deja aux reglages")], []));
+
+  const result = await agent.run("ou suis-je");
+
+  assert.equal(result.tokensUsed, 0);
+});
+
 test("run lands on a written answer when the budget falls", async () => {
   const navigate = navigateTool();
   const deps: AgentDeps = {
@@ -159,6 +187,7 @@ test("a caller can drive the loop itself, one iteration at a time", async () => 
     toolCalls: [{ id: "call-1", name: "navigate", arguments: { page: "reglages" } }],
     stopReason: "completed",
     iterations: 2,
+    tokensUsed: 0,
   });
 });
 

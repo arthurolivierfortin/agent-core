@@ -73,6 +73,7 @@ export function toResult(state: AgentState): AgentResult {
     // state read too early cannot produce a result claiming the agent completed.
     stopReason: state.stopReason ?? "error",
     iterations: state.iterations,
+    tokensUsed: state.tokensUsed,
   };
 }
 

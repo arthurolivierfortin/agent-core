@@ -115,4 +115,11 @@ export type AgentResult = {
   stopReason: StopReason;
   /** Model calls made, the landing one included. */
   iterations: number;
+  /**
+   * Sum of the tokens (input + output) the provider reported over the whole run, the landing call
+   * included. 0 when the provider reports none: this is the budget counter behind
+   * `Budget.maxTokens`, which cannot tell "absent" from zero. The metrics framework keeps that
+   * distinction (`UsageRecord`, `MetricsTotal`).
+   */
+  tokensUsed: number;
 };
