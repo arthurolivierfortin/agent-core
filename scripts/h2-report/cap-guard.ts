@@ -1,6 +1,6 @@
 // Cap guard of the H2 report (#35): docs/specs/2026-09-30-cap-guard-design.md.
 // Reads no argument, writes nothing, shows nothing: the runner of #33 reads what the guard exposes.
-import { aggregate } from "../../dist/index.js";
+import { LLMError, aggregate } from "../../dist/index.js";
 import type { CompletionOptions, LLMProvider, LLMResponse, Message, ModelInfo } from "../../dist/index.js";
 import type { Rate, RateTable } from "../../dist/index.js";
 
@@ -24,6 +24,19 @@ function isPositiveRate(rate: Rate | null): boolean {
 }
 
 /**
+ * The cut a rejected call leaves, read from LLMError.status only: never message, name, code nor
+ * retryAfterMs, so that a text saying 429 classifies nothing.
+ */
+function classifyCut(error: unknown): CutReason {
+  if (!(error instanceof LLMError)) return "unclassified";
+  const { status } = error;
+  if (status === undefined) return "network";
+  if (status === 429) return "rate_limited";
+  if (Number.isInteger(status) && status >= 100 && status <= 599) return `http_${status}`;
+  return "unclassified";
+}
+
+/**
  * Wraps the only hosted provider of the H2 matrix. One instance, built by the runner (#33) around
  * that provider and shared by every run, placed under withMetrics, which records no refused call.
  * An object literal of closures, never a class, a spread nor a proxy; the provider is always called
@@ -31,6 +44,10 @@ function isPositiveRate(rate: Rate | null): boolean {
  *
  * A call's cost is aggregate() of its one record, the arithmetic of the report's total. spentUsd
  * adds up the numeric costs only, so that one unknown cost never masks it with null.
+ *
+ * The first rejected call cuts the matrix, classified on LLMError.status only. Its reason network
+ * means an LLMError without status: with GeminiLLMProvider a rejected fetch, but also an ok
+ * response whose body is unreadable, not JSON or refused, a missing key or an undeclared model.
  */
 export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number): CapGuard {
   // Before anything else: "1" passed as a number, NaN or Infinity would make every check below lie.
@@ -57,7 +74,14 @@ export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number
       cut = "unpriced_model";
       refuse(opts.model, `the matrix is cut (${cut})`);
     }
-    const response = await provider.complete(messages, opts);
+    let response: LLMResponse;
+    try {
+      response = await provider.complete(messages, opts);
+    } catch (error) {
+      // The same error goes on, unwrapped; its cost is unknown, never counted as 0 nor as null.
+      cut ??= classifyCut(error);
+      throw error;
+    }
     const usage = { tokensIn: response.usage?.tokensIn ?? null, tokensOut: response.usage?.tokensOut ?? null };
     const cost = aggregate([{ model: opts.model, ...usage, durationMs: 0 }], rates).costUsd;
     if (cost !== null) spent += cost;
