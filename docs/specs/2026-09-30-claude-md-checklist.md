@@ -19,8 +19,17 @@ Spécification : docs/specs/2026-09-30-claude-md-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **H1 (R1 de la spécification).** Le socle déclare `core` non dérogeable (`dev-kit/conventions/core.md`, tableau de `dev-kit/conventions/derogations.md`) alors que le même `core.md` dit que tout écart est déclaré dans `derogations`. La dérogation `core/langue` est écrite telle qu'Arthur l'a confirmée le 2026-09-30 ; la contradiction est signalée au juge, sans changer la décision. Suivi recommandé hors de cette PR : dans `dev-kit`, rendre le point de langue dérogeable ou consigner l'exception.
+- [H] **H2.** TEST-2 lit « la ligne de `CLAUDE.md` qui contient `` `DEV-xxx` `` » comme une ligne unique : il exige qu'exactement une ligne cite `` `DEV-xxx` `` (vrai aujourd'hui : ligne 20).
+- [H] **H3.** TEST-3 borne le manifeste entre la ligne égale à `<!-- core-project` et la première ligne égale à `-->` du fichier (le bloc est en tête de `CLAUDE.md`, lignes 1 à 14).
+- [H] **H4.** La ligne ajoutée à `ROADMAP.md` est en anglais, comme le reste du document hérité : couvert par « mises à jour comprises » de la dérogation (D2).
+- [H] **H5.** Les sujets de commit sont ceux de D6, à l'infinitif (forme de l'historique du dépôt : `exporter`, `résumer`), sans `Co-Authored-By` (D6).
+- [H] **H6 (R2 de la spécification levée).** Les commentaires de #7 ont été relus par le researcher (`gh issue view 7 --comments`, 2026-09-30) : ils confirment les trois corrections et l'ajout de `ROADMAP.md:139`, sans autre élément de périmètre.
+- [H] **H7.** L'outil Edit peut écrire des fins de ligne LF dans une copie de travail en CRLF ; sans effet sur l'index (`core.autocrlf=true` normalise en LF), vérifié en tâche 5 par `git ls-files --eol`.
+- [H] **H8.** Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1, et un cinquième commit `chore(checklist)` coche les gates et consigne les hypothèses : même pratique que le plan de #9 (`docs/plans/2026-09-30-csv-rejeu-demo-plan.md`) ; D6 (« un SPEC = un commit ») reste respecté pour les quatre livrables.
+- [H] **H9 (ajustement du builder, consigne du pilote).** Le compte des ADR suit main 85771db (#21), fusionnée dans la branche par `git merge origin/main` après le commit de SPEC-1 : `docs/decisions/` compte 21 ADR, `ADR-AGENT-0001` à `0020` copiés de NATHAN et `ADR-AGENT-0021` natif du dépôt. `CLAUDE.md` cite « (ADR-AGENT-0001 à 0020 copiés de NATHAN, 0021 natif du dépôt) » au lieu de « (ADR-AGENT-0001 à 0020) » prévu par SPEC-1 ; TEST-1 (issue 7) lit le nombre d'ADR copiés dans la note d'origine de `docs/decisions/README.md` (inchangée), le total dans la liste des fichiers, et exige cette formule. Correction par un commit `docs(claude-md)` séparé ; le compte reste exact, dans le périmètre approuvé par Arthur (« le compte des ADR exact »).
