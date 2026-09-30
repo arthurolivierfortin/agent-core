@@ -16,7 +16,7 @@
 // - H4: thoughtsTokenCount is not part of candidatesTokenCount; thinking is billed as output.
 //   Locked by "hypothesis H4: thoughtsTokenCount counts as output".
 
-import type { Message, ToolDefinition } from "../../models/index.js";
+import type { Message, ToolCall, ToolDefinition } from "../../models/index.js";
 
 export type GeminiFunctionCall = { id?: string; name: string; args?: Record<string, unknown> };
 export type GeminiFunctionResponse = { name: string; response: { content: string } };
@@ -65,9 +65,23 @@ export function toGeminiRequest(messages: Message[], tools?: ToolDefinition[]): 
       systemTexts.push(message.content);
     } else if (message.role === "user") {
       contents.push({ role: "user", parts: [{ text: message.content }] });
+    } else if (message.role === "assistant") {
+      const parts = modelParts(message.content, message.toolCalls);
+      if (parts.length > 0) contents.push({ role: "model", parts });
     }
   }
   const request: GeminiRequest = { contents };
   if (systemTexts.length > 0) request.systemInstruction = { parts: [{ text: systemTexts.join("\n\n") }] };
   return request;
+}
+
+/**
+ * The parts of an assistant turn: its text unless empty, then one functionCall per toolCall in
+ * order, with no id (H3). An empty result makes the caller omit the turn rather than send an
+ * empty content the API might refuse.
+ */
+function modelParts(content: string, toolCalls: ToolCall[] = []): GeminiPart[] {
+  const parts: GeminiPart[] = content === "" ? [] : [{ text: content }];
+  for (const call of toolCalls) parts.push({ functionCall: { name: call.name, args: call.arguments } });
+  return parts;
 }

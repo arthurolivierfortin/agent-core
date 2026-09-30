@@ -44,3 +44,35 @@ test("toGeminiRequest joins every system message into systemInstruction and maps
   assert.equal("systemInstruction" in bare, false);
   assert.equal("tools" in bare, false);
 });
+
+test("toGeminiRequest maps assistant messages to model contents with functionCall parts, and omits an empty one", () => {
+  const { contents } = toGeminiRequest([
+    user("go"),
+    {
+      role: "assistant",
+      content: "Je regarde.",
+      toolCalls: [
+        { id: "call_0", name: "getCurrentPage", arguments: {} },
+        { id: "call_1", name: "navigate", arguments: { page: "reglages" } },
+      ],
+    },
+    { role: "assistant", content: "", toolCalls: [{ id: "x", name: "getCurrentPage", arguments: {} }] },
+    { role: "assistant", content: "" },
+    user("ok"),
+  ]);
+
+  // Strict equality also proves that no functionCall carries an id (H3).
+  assert.deepStrictEqual(contents, [
+    { role: "user", parts: [{ text: "go" }] },
+    {
+      role: "model",
+      parts: [
+        { text: "Je regarde." },
+        { functionCall: { name: "getCurrentPage", args: {} } },
+        { functionCall: { name: "navigate", args: { page: "reglages" } } },
+      ],
+    },
+    { role: "model", parts: [{ functionCall: { name: "getCurrentPage", args: {} } }] },
+    { role: "user", parts: [{ text: "ok" }] },
+  ]);
+});
