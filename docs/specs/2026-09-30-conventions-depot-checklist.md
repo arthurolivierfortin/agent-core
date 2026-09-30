@@ -33,8 +33,13 @@ Spécification : docs/specs/2026-09-30-conventions-depot-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] H1 (plan) : `.gitignore`, les lignes vides qui séparaient les deux blocs retirés partent avec eux ; toutes les lignes non vides restantes sont identiques.
+- [H] H2 (plan) : ordre d'exécution SPEC-7, puis SPEC-6, puis SPEC-8, seul ordre où chaque TEST-N est rouge avant son SPEC et vert juste après ; numérotation inchangée.
+- [H] H3 (plan) : type de commit `chore` pour SPEC-1 à SPEC-3, `docs` pour SPEC-4 à SPEC-10, sur la branche `chore/1-conventions-depot`.
+- [H] H4 (plan) : rédaction des deux notes d'origine (SPEC-4, SPEC-5) telle que fixée par le plan, titre en gras `Note d'origine (agent-core).`.
+- [H] H5 (plan) : seuls les fichiers `2026-09-30-conventions-depot-*` sont ajoutés au suivi sous `docs/specs/` et `docs/plans/`.
