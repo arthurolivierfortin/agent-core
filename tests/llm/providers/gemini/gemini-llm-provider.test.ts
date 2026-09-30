@@ -282,11 +282,11 @@ function unreadableFetch(status: number, error: unknown): typeof fetch {
 
 type TransportError = Error & { code: string };
 
-/** complete() under this key rejects with an LLMError of exactly this code and message, returned. */
-async function expectFailure(fetchFn: typeof fetch, code: string, message: string, key = "cle-factice-1") {
+/** complete() under this key, and this baseURL when given, rejects with an LLMError of exactly this code and message, returned. */
+async function expectFailure(fetchFn: typeof fetch, code: string, message: string, key = "cle-factice-1", baseURL?: string) {
   let failure: unknown;
   await withEnv({ [KEY_VAR]: key }, async () => {
-    const provider = new GeminiLLMProvider({ models: DECLARED, apiKeyVar: KEY_VAR, fetch: fetchFn });
+    const provider = new GeminiLLMProvider({ models: DECLARED, apiKeyVar: KEY_VAR, fetch: fetchFn, baseURL });
     await assert.rejects(provider.complete([{ role: "user", content: "hi" }], { model: MODEL }), (error: unknown) => {
       failure = error;
       return true;
@@ -405,7 +405,7 @@ function exposed(error: TransportError): string {
 /** A fake key, planted in bodies and exceptions: it must come out as [redacted] everywhere. */
 const PLANTED_KEY = "cle-factice-ne-pas-afficher";
 
-const REDACTION_CASES: { title: string; fetch: typeof fetch; code: string; message: string }[] = [
+const REDACTION_CASES: { title: string; fetch: typeof fetch; baseURL?: string; code: string; message: string }[] = [
   {
     title: "a Gemini error message",
     fetch: respondingFetch(
@@ -454,11 +454,41 @@ const REDACTION_CASES: { title: string; fetch: typeof fetch; code: string; messa
     code: "API_ERROR",
     message: "Gemini returned no candidate (promptFeedback.blockReason: [redacted])",
   },
+  {
+    title: "an error.status of an error body",
+    fetch: respondingFetch(
+      400,
+      JSON.stringify({ error: { code: 400, message: "Bad request.", status: PLANTED_KEY } }),
+    ).fetch,
+    code: "API_ERROR",
+    message: `Gemini 400 [redacted] from ${ENDPOINT}: Bad request.`,
+  },
+  {
+    title: "an ok body that is a JSON string",
+    fetch: respondingFetch(200, JSON.stringify(PLANTED_KEY)).fetch,
+    code: "API_ERROR",
+    message: 'Gemini 200 response is not a JSON object: "[redacted]"',
+  },
+  {
+    title: "the URL of a rejected fetch, through baseURL",
+    fetch: rejectingFetch(new TypeError("fetch failed")),
+    baseURL: `http://${PLANTED_KEY}.invalid`,
+    code: "API_ERROR",
+    message: "Gemini request to http://[redacted].invalid/v1beta/models/gemini-2.5-flash:generateContent failed: TypeError: fetch failed",
+  },
+  {
+    title: "the URL of a non-ok response, through baseURL",
+    fetch: respondingFetch(404, "<html>Not Found</html>").fetch,
+    baseURL: `http://${PLANTED_KEY}.invalid`,
+    code: "API_ERROR",
+    message:
+      "Gemini 404 from http://[redacted].invalid/v1beta/models/gemini-2.5-flash:generateContent (check baseURL: host root, without /v1beta): <html>Not Found</html>",
+  },
 ];
 
-for (const { title, fetch: fetchFn, code, message } of REDACTION_CASES) {
+for (const { title, fetch: fetchFn, baseURL, code, message } of REDACTION_CASES) {
   test(`the key never shows in the serialized error: ${title}`, async () => {
-    const error = await expectFailure(fetchFn, code, message, PLANTED_KEY);
+    const error = await expectFailure(fetchFn, code, message, PLANTED_KEY, baseURL);
     assert.equal(Object.hasOwn(error, "cause"), false);
     assert.equal(exposed(error).includes(PLANTED_KEY), false);
     assert.doesNotMatch(exposed(error), /cle-/);
