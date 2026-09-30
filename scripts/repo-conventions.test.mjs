@@ -3,7 +3,9 @@
 // Ce fichier ne lit aucun fichier .env : seulement les .env.example versionnés.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 function readRepoFile(relativePath) {
   return readFileSync(new URL("../" + relativePath, import.meta.url), "utf8");
@@ -278,4 +280,35 @@ test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-ca
     existsSync(new URL("../src/metrics/application/use-cases/with-metrics.ts", import.meta.url)),
     "src/metrics/application/use-cases/with-metrics.ts introuvable",
   );
+});
+
+// Forme d'une clé d'API Google : aucun fichier versionné n'en porte une.
+const GOOGLE_KEY_SHAPE = /AIza[0-9A-Za-z_-]{35}/;
+
+test("TEST-3 (issue 26) le test d'intégration Gemini est ignoré sans GEMINI_INTEGRATION=1", () => {
+  const file = "tests/integration/gemini.integration.test.ts";
+  // Le fils n'a ni l'opt-in ni la clé : il ne peut pas appeler l'API. NODE_TEST_CONTEXT, posé par
+  // le lanceur de node --test, ferait sauter au node --test imbriqué l'exécution de ses fichiers.
+  // Les noms se comparent sans casse : sous Windows, process.env les ignore.
+  const scrubbed = ["GEMINI_INTEGRATION", "GEMINI_API_KEY", "NODE_TEST_CONTEXT"];
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !scrubbed.includes(name.toUpperCase())));
+  const child = spawnSync(process.execPath, ["--test", "--test-reporter=tap", file], {
+    cwd: fileURLToPath(new URL("../", import.meta.url)),
+    env,
+    encoding: "utf8",
+  });
+  assert.equal(child.status, 0, `node --test ${file} : code ${child.status}\n${child.stdout}${child.stderr}`);
+  assert.ok(
+    child.stdout.includes("# SKIP set GEMINI_INTEGRATION=1 with GEMINI_API_KEY in the environment"),
+    `${file} n'est pas ignoré par défaut\n${child.stdout}`,
+  );
+  assert.match(child.stdout, /^# fail 0$/m);
+  const source = readRepoFile(file);
+  for (const expected of ['process.env.GEMINI_INTEGRATION === "1"', "checkProviderContract"]) {
+    assert.ok(source.includes(expected), `${file} sans ${expected}`);
+  }
+  for (const forbidden of ["console.", "dotenv", "readFileSync", "GEMINI_API_KEY ="]) {
+    assert.ok(!source.includes(forbidden), `${file} contient ${forbidden}`);
+  }
+  assert.doesNotMatch(source, GOOGLE_KEY_SHAPE);
 });
