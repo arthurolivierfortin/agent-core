@@ -224,3 +224,32 @@ test("checkProviderContract passes on a fetch double, with no streaming check", 
     );
   });
 });
+
+test("complete() refuses a missing key and names the default variable, before calling fetch", async () => {
+  const double = unreachableFetch();
+  const provider = new GeminiLLMProvider({ models: DECLARED, fetch: double.fetch });
+  const call = () => provider.complete([{ role: "user", content: "hi" }], { model: MODEL });
+  await withEnv({ GEMINI_API_KEY: undefined }, async () => {
+    await assert.rejects(call, llmError("MISSING_API_KEY", [/GEMINI_API_KEY/]));
+  });
+  await withEnv({ GEMINI_API_KEY: "" }, async () => {
+    await assert.rejects(call, llmError("MISSING_API_KEY", [/GEMINI_API_KEY/]));
+  });
+  assert.equal(double.count(), 0);
+});
+
+test("complete() refuses a missing key and names the configured variable, never a value", async () => {
+  const double = unreachableFetch();
+  const provider = new GeminiLLMProvider({ models: DECLARED, apiKeyVar: KEY_VAR, fetch: double.fetch });
+  const call = () => provider.complete([{ role: "user", content: "hi" }], { model: MODEL });
+  await withEnv({ [KEY_VAR]: undefined, GEMINI_API_KEY: "cle-factice-ne-pas-afficher" }, async () => {
+    await assert.rejects(
+      call,
+      llmError("MISSING_API_KEY", [/AGENT_CORE_TEST_GEMINI_KEY/], [/GEMINI_API_KEY/, /cle-factice-ne-pas-afficher/]),
+    );
+  });
+  await withEnv({ [KEY_VAR]: "" }, async () => {
+    await assert.rejects(call, llmError("MISSING_API_KEY", [/AGENT_CORE_TEST_GEMINI_KEY/]));
+  });
+  assert.equal(double.count(), 0);
+});

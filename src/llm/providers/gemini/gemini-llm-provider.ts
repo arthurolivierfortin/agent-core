@@ -66,7 +66,14 @@ export class GeminiLLMProvider implements LLMProvider {
     this.assertDeclared(opts.model);
     // Read on every call and kept in a local, never in a field: a change of process.env between
     // two calls is honoured, and no serialization of the instance carries the key.
-    const apiKey = process.env[this.apiKeyVar] ?? "";
+    const apiKey = process.env[this.apiKeyVar];
+    if (apiKey === undefined || apiKey === "") {
+      // The name of the variable only: its value never enters a message.
+      throw new LLMError(
+        "MISSING_API_KEY",
+        `Gemini API key missing: environment variable ${this.apiKeyVar} is unset or empty`,
+      );
+    }
     const body = toGeminiRequest(messages, opts.tools);
     const res = await this.fetchFn(geminiGenerateContentUrl(opts.model, this.baseURL), {
       method: "POST",
