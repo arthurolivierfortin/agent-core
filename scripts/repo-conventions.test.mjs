@@ -3,7 +3,7 @@
 // Ce fichier ne lit aucun fichier .env : seulement les .env.example versionnés.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 function readRepoFile(relativePath) {
   return readFileSync(new URL("../" + relativePath, import.meta.url), "utf8");
@@ -169,4 +169,23 @@ test("TEST-8 (issue 9) le guide et le README documentent la matrice, ses exports
   assert.ok(!guide.includes("llm/infrastructure/with-metrics.ts"), "guide : ancien emplacement de withMetrics");
   const entry = splitLines(readme).find((line) => line.startsWith("| `./testing` |")) ?? "";
   for (const name of ["runMatrix", "replayRun"]) assert.ok(entry.includes(name), `README : ligne ./testing sans ${name}`);
+});
+
+test("TEST-1 (issue 7) CLAUDE.md cite l'intervalle exact des ADR", () => {
+  const numbers = readdirSync(new URL("../docs/decisions/", import.meta.url))
+    .map((name) => /^ADR-AGENT-(\d{4})-.+\.md$/.exec(name))
+    .filter((match) => match !== null)
+    .map((match) => Number(match[1]))
+    .sort((a, b) => a - b);
+  const count = numbers.length;
+  assert.ok(count > 0, "docs/decisions/ : aucun fichier ADR-AGENT-NNNN-*.md");
+  assert.deepEqual(
+    numbers,
+    Array.from({ length: count }, (_, index) => index + 1),
+    "docs/decisions/ : numéros d'ADR non contigus depuis 0001",
+  );
+  const claude = readRepoFile("CLAUDE.md");
+  assert.equal(claude.split("(ADR-AGENT-0001 à ").length - 1, 1, "CLAUDE.md : « (ADR-AGENT-0001 à » absent ou répété");
+  const expected = `(ADR-AGENT-0001 à ${String(count).padStart(4, "0")})`;
+  assert.ok(claude.includes(expected), `CLAUDE.md : intervalle des ADR attendu ${expected}`);
 });
