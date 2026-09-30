@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { defineAgent } from "../../../dist/agent/index.js";
 import type { AgentDeps } from "../../../dist/agent/index.js";
 import { defineScenario, fakeApp } from "../../../dist/agent/testing/index.js";
-import type { FakeApp, FakeAppState } from "../../../dist/agent/testing/index.js";
+import type { FakeApp, FakeAppState, MatrixSummaryRow } from "../../../dist/agent/testing/index.js";
 import { runMatrix } from "../../../dist/agent/testing/run-matrix.js";
 import type { MatrixOptions } from "../../../dist/agent/testing/run-matrix.js";
 import { HeuristicTokenCounter, SlidingWindowStrategy } from "../../../dist/context/index.js";
@@ -212,4 +212,42 @@ test("a deps or an env that throws becomes that run's error, with what was recor
   const broken = [scenario("aller aux reglages", "reglages", () => { throw new Error("env broke"); })];
   const [run] = (await matrix({ scenarios: broken, deps: () => wiring(provider) })).runs;
   assert.deepEqual([run.error, run.trace.finalState, run.trace.responses, provider.calls.length], ["env broke", null, [], 0]);
+});
+
+test("runMatrix sums each (scenario, combination) pair into one summary line, in the order the pairs ran", async () => {
+  const scripts = [
+    [navigate(USAGE), text("tu y es", USAGE)],
+    [text("non", USAGE)],
+    [navigate(USAGE), text("tu y es", USAGE)],
+    [navigate(), text("tu y es")],
+  ];
+  let built = 0;
+  let t = 0;
+  const report = await runMatrix({
+    scenarios: [scenario("aller aux reglages", "reglages")],
+    axes: { model: ["a", "b"] },
+    runs: 2,
+    deps: () => wiring(new FakeLLMProvider({ responses: scripts[built++] })),
+    rates: { "fake-model": RATE },
+    now: () => (t += 10),
+  });
+
+  const summary: readonly MatrixSummaryRow<{ model: string[] }>[] = report.summary;
+  assert.deepEqual(summary, [
+    {
+      scenario: "aller aux reglages", combination: { model: "a" }, runs: 2, passed: 1,
+      successRate: 0.5, meanDurationMs: 40, tokensUsed: 2_250_000, costUsd: 9,
+    },
+    {
+      scenario: "aller aux reglages", combination: { model: "b" }, runs: 2, passed: 2,
+      successRate: 1, meanDurationMs: 50, tokensUsed: null, costUsd: null,
+    },
+  ]);
+  assert.equal(summary[0].combination, report.runs[0].combination);
+  assert.equal(summary[1].combination, report.runs[2].combination);
+
+  const two = [scenario("aller aux reglages", "reglages"), scenario("aller au profil", "profil")];
+  const { summary: lines } = await matrix({ scenarios: two });
+  const rows = lines.map((r) => [r.scenario, r.runs, r.passed, r.successRate]);
+  assert.deepEqual(rows, [["aller aux reglages", 1, 1, 1], ["aller au profil", 1, 0, 0]]);
 });
