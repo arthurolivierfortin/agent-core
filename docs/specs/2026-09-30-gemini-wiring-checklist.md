@@ -25,8 +25,24 @@ Spécification : docs/specs/2026-09-30-gemini-wiring-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] H1 à H8 (#18, #19, #25) · Restent non vérifiées contre l'API réelle ; ce plan ne les change pas et ne lance pas le test d'intégration. Le premier lancement par Arthur renseignera H1, et par construction H5 et H6 ; H2 à H4 attendent #20 ; H7 et H8 restent sans chemin d'erreur réel.
+- [H] P1 · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1 (spécification, « Ordre des commits » ; précédents de #18, #19, #25).
+- [H] P2 · Rouge de TEST-1 : le fichier ne se charge pas (`SyntaxError` au lien ESM, l'import nommé `DEFAULT_GEMINI_MODEL` n'existant pas dans `dist/llm/index.js`), au lieu de la `TypeError` par test que décrit la spécification ; même cause, SPEC-1 absent. TEST-1 est découpé en quatre `test()` aux titres choisis par ce plan ((a) à (d) dans l'ordre de la checklist).
+- [H] P3 · TEST-2 : la liste de `.` (l.32) est réécrite une valeur par ligne ; le test (d) porte le titre `` `.` and `./llm` expose GeminiLLMProvider and the GeminiConfig it takes `` et vérifie en plus `new llm.GeminiLLMProvider(fromLlm).id === "gemini"` (l'instance construite par `./llm` est lue, pas jetée) ; les types sont importés par l'import de type existant de `.` et par un nouvel import `GeminiConfig as LlmGeminiConfig` de `./llm`.
+- [H] P4 · Le test « `.` and `./llm` serve no Gemini wire symbol » est vert avant et après SPEC-2 : il verrouille la frontière (précédent P4 de #25) ; le rouge de TEST-2 est porté par (a), (b), (d) et par `npm run typecheck`.
+- [H] P5 · TEST-3 retire `GEMINI_INTEGRATION`, `GEMINI_API_KEY` et `NODE_TEST_CONTEXT` de l'environnement du fils **sans tenir compte de la casse** (`Object.entries(process.env)` filtré sur `name.toUpperCase()`) : sous Windows, `process.env` ignore la casse (constaté), et une variable `Gemini_Integration` copiée telle quelle activerait le test dans le fils. Le message d'échec de `child.status` cite `stdout` et `stderr` du fils, dont l'environnement n'a pas de clé. La sortie TAP de Node 22.19 a été observée (R2 levée) et le retrait de `NODE_TEST_CONTEXT` est nécessaire (R3 levée : hérité, il fait sauter l'exécution du fichier).
+- [H] P6 · Garde de la règle A2 par `node -e "process.exit(process.env.GEMINI_INTEGRATION === undefined ? 0 : 1)"` plutôt que `$env:GEMINI_INTEGRATION` (PowerShell) : le builder travaille en Bash, et le garde lit la variable comme la lira `node --test`, sans casse et sans rien afficher.
+- [H] P7 · Noms et emplacements choisis par ce plan dans `scripts/repo-conventions.test.mjs` : constante `GOOGLE_KEY_SHAPE` (avant TEST-3), constante `GEMINI_DOC_EXPECTED` (avant TEST-4), les trois tests ajoutés en fin de fichier ; commentaires en français comme le reste du fichier.
+- [H] P8 · `README.md` : la ligne `const c = PROVIDERS.gemini(); …` est placée juste après `const a = PROVIDERS.ollama(); …`, sous « Direct, typed access to a known provider » ; la section « Setting up Gemini » ajoute un court exemple de construction (non exigé par la spécification) et la phrase sur le test manquant sans clé (D5) ; le 404 hors Gemini est décrit par « says "check baseURL" in its message ».
+- [H] P9 · H6 n'a pas de test à son nom : le README et le guide la disent verrouillée par le test H5, qui fige l'ensemble exact des en-têtes envoyés (`tests/llm/providers/gemini/gemini-llm-provider.test.ts:118`). C'est la lecture de « chacune verrouillée par un test sur un double » (SPEC-4, point 5).
+- [H] P10 · Le guide dit où vit chaque verrou (H1 à H4 dans `gemini-wire.test.ts`, H5 à H8 dans `gemini-llm-provider.test.ts`) et que `scripts/repo-conventions.test.mjs` vérifie que la suite par défaut ignore le test d'intégration ; ses deux commandes sont en code en ligne, celles du README en blocs.
+- [H] P11 · `makeGemini` : JSDoc anglais repris de `makeOllama`, plus une phrase sur la clé ; `DEFAULT_GEMINI_MODEL` placé après `DEFAULT_OLLAMA_MODEL`, `makeGemini` après `makeOllama`.
+- [H] P12 · TEST-6 : le commentaire de `expectFailure` mentionne `baseURL` ; le champ `baseURL` des cas est placé entre `fetch` et `code` ; les hôtes plantés sont en `.invalid`, domaine réservé jamais résolu (et les doubles n'appellent aucun réseau).
+- [H] P13 · TEST-7 porte le commentaire `// Fixed as it is (R1 of #26): …` pour que le libellé inexact ne passe pas pour voulu.
+- [H] P14 · Les mutations de TEST-6 et TEST-7 s'annulent par `git restore src/llm/providers/gemini/gemini-llm-provider.ts`, qui rend l'état commité à la tâche 2 (les deux commentaires de SPEC-2 ne décalent aucune ligne : l.97, 110, 138, 140, 141 sont celles de la checklist).
+- [H] P15 · Taille : 279 lignes ajoutées mesurées sur la sonde, contre environ 250 estimées (fourchette 210 à 300), sous le seuil de 400, sans dérogation.
