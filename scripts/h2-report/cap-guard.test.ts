@@ -272,3 +272,28 @@ for (const [title, rates] of INFINITE_RATES) {
     );
   });
 }
+
+// The cut/cap pair has no reachable state where both hold, so no test can order it (SPEC-5, R-2 of
+// docs/specs/2026-09-30-cap-guard-finite-cost-design.md); the two pairs below put the rate last.
+test("TEST-5 (issue 39) the checks run in the order cut, cap, rate", async () => {
+  const UNPRICED = { model: "unpriced-model" };
+  // The cap before the rate: 0.5 USD spent at a cap of 0.5, then a model absent from RATES.
+  const capped = scripted([PRICED]);
+  const atCap = capGuard(capped.provider, RATES, 0.5);
+  await atCap.complete(HI, OPTS);
+  const capFirst = [await settle(atCap.complete(HI, UNPRICED)), atCap.cutReason(), atCap.refused(), capped.count()];
+  // The cut before the rate: cut by a status 429, then a model absent from RATES.
+  const error = new LLMError("API_ERROR", "quota", { status: 429 });
+  const limited = scripted([PRICED, { error }]);
+  const cut = capGuard(limited.provider, RATES, 10);
+  await cut.complete(HI, OPTS);
+  await assert.rejects(cut.complete(HI, OPTS), (thrown) => thrown === error);
+  const cutFirst = [await settle(cut.complete(HI, UNPRICED)), cut.cutReason(), cut.refused(), limited.count()];
+  assert.deepEqual(
+    { capFirst, cutFirst },
+    {
+      capFirst: ["capGuard refused a call to 'unpriced-model': 0.5 USD spent reached the cap of 0.5 USD", null, 1, 1],
+      cutFirst: [cutMessage("unpriced-model", "rate_limited"), "rate_limited", 1, 2],
+    },
+  );
+});
