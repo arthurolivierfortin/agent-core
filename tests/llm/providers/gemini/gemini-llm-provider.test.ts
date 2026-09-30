@@ -362,3 +362,18 @@ test("only a 404 whose error.status is NOT_FOUND is MODEL_NOT_FOUND", async () =
     `Gemini 400 NOT_FOUND from ${ENDPOINT}: x`,
   );
 });
+
+/** A fetch double that rejects with this reason, as fetch does when the network fails. */
+function rejectingFetch(reason: unknown): typeof fetch {
+  return (() => Promise.reject(reason)) as unknown as typeof fetch;
+}
+
+test("a rejected fetch is an API_ERROR that names the URL, with no chained cause", async () => {
+  const error = await expectFailure(
+    rejectingFetch(new TypeError("fetch failed")),
+    "API_ERROR",
+    `Gemini request to ${ENDPOINT} failed: TypeError: fetch failed`,
+  );
+  assert.equal(Object.hasOwn(error, "cause"), false);
+  await expectFailure(rejectingFetch("offline"), "API_ERROR", `Gemini request to ${ENDPOINT} failed: offline`);
+});

@@ -83,11 +83,18 @@ export class GeminiLLMProvider implements LLMProvider {
     }
     const body = toGeminiRequest(messages, opts.tools);
     const url = geminiGenerateContentUrl(opts.model, this.baseURL);
-    const res = await this.fetchFn(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify(body),
-    });
+    let res: Response;
+    try {
+      res = await this.fetchFn(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify(body),
+      });
+    } catch (cause) {
+      // No chained cause (D4): its text enters the message, the object itself never travels.
+      const reason = excerpt(String(cause));
+      throw new LLMError("API_ERROR", `Gemini request to ${url} failed: ${reason}`);
+    }
     // Status first: an error body never reaches fromGeminiResponse, whose "no candidate" would mislead.
     if (!res.ok) throw await httpError(res, url, opts.model);
     return fromGeminiResponse((await res.json()) as GeminiResponse);
