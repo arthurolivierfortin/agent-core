@@ -91,3 +91,29 @@ test("TEST-3 (issue 35) a call admitted under the cap crosses it by its own cost
   assert.equal(guard.refused(), 2);
   assert.equal(guard.cutReason(), null);
 });
+
+/** A provider double whose calls wait until the test resolves the first one; it counts its calls. */
+function deferred(): { provider: LLMProvider; count: () => number; resolveFirst: (response: LLMResponse) => void } {
+  const pending: Array<(response: LLMResponse) => void> = [];
+  const provider: LLMProvider = {
+    id: "hosted-double",
+    supportsStreaming: () => false,
+    models: () => MODELS,
+    complete: () => new Promise<LLMResponse>((resolve) => pending.push(resolve)),
+  };
+  return { provider, count: () => pending.length, resolveFirst: (response) => pending[0](response) };
+}
+
+test("TEST-4 (issue 35) two calls launched together reach the provider one after the other", async () => {
+  const double = deferred();
+  const guard = capGuard(double.provider, RATES, 0.5);
+  const first = guard.complete(HI, OPTS);
+  const second = guard.complete(HI, OPTS);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(double.count(), 1);
+  double.resolveFirst(PRICED_RESPONSE);
+  assert.equal(await first, PRICED_RESPONSE);
+  await assert.rejects(second, { message: capMessage(0.5, 0.5) });
+  assert.equal(double.count(), 1);
+  assert.equal(guard.refused(), 1);
+});

@@ -33,6 +33,7 @@ export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number
   let spent = 0;
   let refusals = 0;
   let cut: CutReason | null = null;
+  let tail: Promise<unknown> = Promise.resolve();
 
   // A refusal never reaches the provider, and counts one.
   function refuse(model: string, why: string): never {
@@ -54,7 +55,13 @@ export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number
     id: provider.id,
     supportsStreaming: (): boolean => false,
     models: (): ModelInfo[] => provider.models(),
-    complete: guarded,
+    // Each call waits for the previous one to settle before its checks: two calls in flight together
+    // would each pass under the cap, and cross it by more than one call.
+    complete: (messages: Message[], opts: CompletionOptions): Promise<LLMResponse> => {
+      const call = tail.then(() => guarded(messages, opts));
+      tail = call.catch(() => undefined);
+      return call;
+    },
     spentUsd: (): number => spent,
     refused: (): number => refusals,
     cutReason: (): CutReason | null => cut,
