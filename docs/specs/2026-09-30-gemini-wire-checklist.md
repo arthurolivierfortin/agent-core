@@ -29,8 +29,34 @@ Spécification : docs/specs/2026-09-30-gemini-wire-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+
+Hypothèses de format de la spécification, non vérifiées contre l'API réelle (première vérification possible : le premier appel réel de #19 ou #20) :
+
+- [H] H1 · L'endpoint est `POST {base}/v1beta/models/{model}:generateContent` (et non `v1`), `base` = `https://generativelanguage.googleapis.com`. Verrou : « hypothesis H1: generateContent is served under v1beta » (TEST-1).
+- [H] H2 · Les résultats d'outil (`functionResponse`) voyagent dans un contenu de rôle `user` (ni `function` ni `tool`). Verrou : « hypothesis H2: tool results travel in a user content » (TEST-4).
+- [H] H3 · L'`id` d'un `functionCall` est facultatif en réponse pour `gemini-2.5-flash` ; absent, il est synthétisé `call_<i>`. Aucun `id` n'est renvoyé dans la requête (`functionCall` et `functionResponse` sans clé `id`) : la corrélation se fait par nom et par ordre. Verrou : « hypothesis H3: functionCall ids are optional » (TEST-7), et TEST-3 et TEST-4 (requête, égalité stricte sans clé `id`).
+- [H] H4 · `thoughtsTokenCount` n'est pas inclus dans `candidatesTokenCount` ; les jetons de pensée sont facturés en sortie et s'y ajoutent. Verrou : « hypothesis H4: thoughtsTokenCount counts as output » (TEST-9).
+- [H] D2 · `assistant` sans part omis. Un `parts: []` ou une part `{ text: "" }` risquerait un refus de l'API (non vérifié) ; l'omission ne perd aucune information. Écarté : lever une erreur (un tour vide de l'assistant est légitime dans l'historique).
+- [H] D3 · `content.parts` absent traité comme « sans content ». Sans cette règle, lire `parts` lèverait un `TypeError` au lieu d'un `LLMError` ; ce cas est plausible quand la pensée consomme tout le budget (`finishReason: MAX_TOKENS`), non vérifié. `parts: []` reste une réponse vide valide (`content: ""`, `toolCalls: []`).
+- [H] D4 · `parameters` transmis tel quel. `ToolSchema` n'emploie que le sous-ensemble JSON Schema (types minuscules, `enum`, `items`, `properties`, `required`) que les exemples de déclaration de fonction Gemini emploient ; aucune conversion vers les types majuscules OpenAPI. Non vérifié ; un refus observé en #19 sera un SPEC à part.
+- [H] Deux contenus `user` consécutifs (résultats d'outil puis message `user`) sont supposés acceptés par l'API ; non vérifié, non testé.
+
+Hypothèses du plan :
+
+- [H] P1 · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1, même pratique que #9, #11, #8 et #12.
+- [H] P2 · État intermédiaire de la tâche 4 : un message `tool` dont aucun `assistant` précédent ne porte le `toolCallId` est sauté (`continue`), sans levée, jusqu'à la tâche 5 qui remplace cette ligne par la `LLMError`. Ainsi TEST-5 est rouge pour la raison qu'annonce la spécification (« aucune levée avant SPEC-5 ») sans écrire la levée avant son SPEC.
+- [H] P3 · État intermédiaire de la tâche 7 : `fromGeminiResponse` lit les parts par chaînage optionnel (`body.candidates?.[0]?.content?.parts ?? []`), sans assertion non nulle dans le code de production ; le rouge de TEST-8 est donc `Missing expected exception.` et non le `TypeError` qu'annonce la section « Ordre des commits » de la spécification. Même raison de fond : la levée typée n'existe pas encore.
+- [H] P4 · Les rouges de TEST-2 et TEST-7 sont une `SyntaxError` au chargement du fichier (export absent), qui fait échouer le fichier entier (`# tests 1`), conformément à « export absent » de la spécification.
+- [H] P5 · « Le contenu précédemment ajouté à `contents` provient d'un message `tool` » est lu littéralement : la variable `toolContent` n'est remise à zéro que par l'ajout d'un contenu `user` ou `model`. Un message `system`, ou un `assistant` vide omis (D2), placé entre deux messages `tool` ne coupe donc pas la fusion. Cas non testé (hors checklist).
+- [H] P6 · Messages d'erreur exacts, repris des exemples de la spécification : `Gemini request: tool message references toolCallId '<id>' but no preceding assistant toolCall has that id`, `Gemini returned no candidate (promptFeedback.blockReason: <valeur ou none>)`, `Gemini candidate has no content (finishReason: <valeur ou none>)`.
+- [H] P7 · Ordre des fonctions dans le module : types, URL, `toGeminiRequest`, puis chaque aide et `fromGeminiResponse` ajoutés à la fin du fichier dans l'ordre des tâches (`modelParts`, `toolCallName`, `toFunctionDeclaration`, `fromGeminiResponse`, `firstCandidateParts`, `toUsage`). Les types `GeminiPart` et `GeminiFunctionDeclaration` sont écrits sur plusieurs lignes (la spécification les donne sur une ligne), par lisibilité ; aucun effet sur le typage.
+- [H] P8 · `modelParts(content, toolCalls = [])` reçoit `message.toolCalls` tel quel, absent compris ; `toUsage` lit les compteurs dans des constantes locales pour que TypeScript les restreigne à `number` sans transtypage.
+- [H] P9 · Aides de test : `user(content)` (abréviation `user "go"` de la checklist), `apiError(...patterns)` (nom `LLMError`, code `API_ERROR`, chaque motif sur le message, forme de `tests/llm/providers/ollama/ollama-adapter.test.ts:55-60`), `usageOf` dans TEST-9. TEST-6 lit `tools![0]` par assertion non nulle, dans le test seulement.
+- [H] P10 · TEST-9 teste l'absence de `usageMetadata` sur un corps sans la clé (`fromGeminiResponse(answer)`), et non sur `usageMetadata: undefined`.
+- [H] P11 · Titres des tests hors H1 à H4 et rédaction des commentaires (anglais, style du dépôt, le pourquoi) choisis par ce plan dans le cadre fixé par la spécification.
+- [H] P12 · La taille mesurée (+412) dépasse le seuil de 400 ; la variante retenue est celle que le pilote a tranchée (question de ce plan), citée dans la PR. Variante retenue : B, PR unique au-dessus du seuil, décision du pilote du 2026-09-30.
