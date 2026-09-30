@@ -395,3 +395,72 @@ test("an ok response whose body cannot be read is an API_ERROR with the status",
     "Gemini 200 response body could not be read: Error: socket closed",
   );
 });
+
+/** Everything a serialized error shows: String, JSON, name, code, and every own property. */
+function exposed(error: TransportError): string {
+  const own = Object.getOwnPropertyNames(error).map((name) => String((error as unknown as Record<string, unknown>)[name]));
+  return [String(error), JSON.stringify(error), error.name, error.code, ...own].join("\n");
+}
+
+/** A fake key, planted in bodies and exceptions: it must come out as [redacted] everywhere. */
+const PLANTED_KEY = "cle-factice-ne-pas-afficher";
+
+const REDACTION_CASES: { title: string; fetch: typeof fetch; code: string; message: string }[] = [
+  {
+    title: "a Gemini error message",
+    fetch: respondingFetch(
+      400,
+      JSON.stringify({ error: { code: 400, message: `API key ${PLANTED_KEY} not valid.`, status: "INVALID_ARGUMENT" } }),
+    ).fetch,
+    code: "API_ERROR",
+    message: `Gemini 400 INVALID_ARGUMENT from ${ENDPOINT}: API key [redacted] not valid.`,
+  },
+  {
+    title: "a NOT_FOUND message",
+    fetch: respondingFetch(
+      404,
+      JSON.stringify({ error: { code: 404, message: `models/${PLANTED_KEY} is not found`, status: "NOT_FOUND" } }),
+    ).fetch,
+    code: "MODEL_NOT_FOUND",
+    message: `Gemini has no model 'gemini-2.5-flash' (404 NOT_FOUND from ${ENDPOINT}): models/[redacted] is not found`,
+  },
+  {
+    title: "a body cut right after the key",
+    fetch: respondingFetch(500, "x".repeat(190) + PLANTED_KEY + "y".repeat(50)).fetch,
+    code: "API_ERROR",
+    message: `Gemini 500 from ${ENDPOINT}: ${"x".repeat(190)}[redacted]...`,
+  },
+  {
+    title: "the message of a rejected fetch",
+    fetch: rejectingFetch(new Error(`connect ECONNREFUSED ${PLANTED_KEY}`)),
+    code: "API_ERROR",
+    message: `Gemini request to ${ENDPOINT} failed: Error: connect ECONNREFUSED [redacted]`,
+  },
+  {
+    title: "an ok body that is not JSON",
+    fetch: respondingFetch(200, `${PLANTED_KEY} is not JSON`).fetch,
+    code: "API_ERROR",
+    message: "Gemini 200 response is not JSON: [redacted] is not JSON",
+  },
+  {
+    title: "the exception of an unreadable body",
+    fetch: unreadableFetch(200, new Error(`stream broke on ${PLANTED_KEY}`)),
+    code: "API_ERROR",
+    message: "Gemini 200 response body could not be read: Error: stream broke on [redacted]",
+  },
+  {
+    title: "a blockReason read by fromGeminiResponse",
+    fetch: respondingFetch(200, JSON.stringify({ promptFeedback: { blockReason: PLANTED_KEY } })).fetch,
+    code: "API_ERROR",
+    message: "Gemini returned no candidate (promptFeedback.blockReason: [redacted])",
+  },
+];
+
+for (const { title, fetch: fetchFn, code, message } of REDACTION_CASES) {
+  test(`the key never shows in the serialized error: ${title}`, async () => {
+    const error = await expectFailure(fetchFn, code, message, PLANTED_KEY);
+    assert.equal(Object.hasOwn(error, "cause"), false);
+    assert.equal(exposed(error).includes(PLANTED_KEY), false);
+    assert.doesNotMatch(exposed(error), /cle-/);
+  });
+}

@@ -1,7 +1,8 @@
 // Gemini provider (#19): transports to generateContent the request that toGeminiRequest builds,
 // and returns what fromGeminiResponse reads. Design: docs/specs/2026-09-30-gemini-provider-design.md.
 // Transport errors (#25): docs/specs/2026-09-30-gemini-errors-design.md. No LLMError of this module
-// chains a cause, and an external string (body, exception) enters a message only as a bounded excerpt.
+// chains a cause, and an external string (body, exception) enters a message only with the key
+// redacted first, then as a bounded excerpt, so that a cut never leaves a prefix of the key (D3).
 // The registry and the barrel exports belong to #26, so no barrel serves this module yet.
 //
 // Hypotheses not yet verified against the real API, each locked by a test on a fetch double in
@@ -92,23 +93,30 @@ export class GeminiLLMProvider implements LLMProvider {
       });
     } catch (cause) {
       // No chained cause (D4): its text enters the message, the object itself never travels.
-      const reason = excerpt(String(cause));
-      throw new LLMError("API_ERROR", `Gemini request to ${url} failed: ${reason}`);
+      const reason = excerpt(redactKey(String(cause), apiKey));
+      throw new LLMError("API_ERROR", `Gemini request to ${redactKey(url, apiKey)} failed: ${reason}`);
     }
     // Status first: an error body never reaches fromGeminiResponse, whose "no candidate" would mislead.
-    if (!res.ok) throw await httpError(res, url, opts.model);
+    if (!res.ok) throw await httpError(res, url, opts.model, apiKey);
     // Parsed here rather than by res.json(): the excerpt of a bad body is ours, not a V8 fragment (D6).
-    const text = await readBody(res);
+    const text = await readBody(res, apiKey);
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch {
-      throw new LLMError("API_ERROR", `Gemini ${res.status} response is not JSON: ${excerpt(text)}`);
+      throw new LLMError("API_ERROR", `Gemini ${res.status} response is not JSON: ${excerpt(redactKey(text, apiKey))}`);
     }
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new LLMError("API_ERROR", `Gemini ${res.status} response is not a JSON object: ${excerpt(text)}`);
+      const quoted = excerpt(redactKey(text, apiKey));
+      throw new LLMError("API_ERROR", `Gemini ${res.status} response is not a JSON object: ${quoted}`);
     }
-    return fromGeminiResponse(parsed as GeminiResponse);
+    try {
+      return fromGeminiResponse(parsed as GeminiResponse);
+    } catch (error) {
+      // Its messages quote blockReason and finishReason, strings from the server (D7).
+      if (error instanceof LLMError) throw new LLMError(error.code, redactKey(error.message, apiKey));
+      throw error;
+    }
   }
 
   /** First of all: MODEL_NOT_FOUND whatever the environment holds, and never a network call. */
@@ -124,23 +132,24 @@ export class GeminiLLMProvider implements LLMProvider {
  * carries one (H8), else the body text, always as a bounded excerpt and never the raw body (D2).
  * A 404 whose error.status is NOT_FOUND is MODEL_NOT_FOUND (H7); any other 404 points at baseURL (D8).
  */
-async function httpError(res: Response, url: string, model: string): Promise<LLMError> {
-  const text = await readBody(res);
+async function httpError(res: Response, url: string, model: string, apiKey: string): Promise<LLMError> {
+  const text = await readBody(res, apiKey);
   const gemini = geminiErrorOf(text);
   const detail = gemini?.message ?? text;
-  const extract = detail === "" ? "(empty body)" : excerpt(detail);
-  const errorStatus = gemini?.status === undefined ? "" : " " + excerpt(gemini.status);
+  const extract = detail === "" ? "(empty body)" : excerpt(redactKey(detail, apiKey));
+  const errorStatus = gemini?.status === undefined ? "" : " " + excerpt(redactKey(gemini.status, apiKey));
+  const safeUrl = redactKey(url, apiKey);
   // Only Gemini's own NOT_FOUND names a missing model: a 404 from a wrong baseURL does not carry it.
   if (res.status === 404 && gemini?.status === "NOT_FOUND") {
-    return new LLMError("MODEL_NOT_FOUND", `Gemini has no model '${model}' (404 NOT_FOUND from ${url}): ${extract}`);
+    return new LLMError("MODEL_NOT_FOUND", `Gemini has no model '${model}' (404 NOT_FOUND from ${safeUrl}): ${extract}`);
   }
   if (res.status === 404) {
     return new LLMError(
       "API_ERROR",
-      `Gemini 404${errorStatus} from ${url} (check baseURL: host root, without /v1beta): ${extract}`,
+      `Gemini 404${errorStatus} from ${safeUrl} (check baseURL: host root, without /v1beta): ${extract}`,
     );
   }
-  return new LLMError("API_ERROR", `Gemini ${res.status}${errorStatus} from ${url}: ${extract}`);
+  return new LLMError("API_ERROR", `Gemini ${res.status}${errorStatus} from ${safeUrl}: ${extract}`);
 }
 
 /** The string status and message of the error object of a JSON body, or undefined without one (H8). */
@@ -161,13 +170,18 @@ function geminiErrorOf(text: string): { status?: string; message?: string } | un
 }
 
 /** The body text. A body that cannot be read is an API_ERROR with the status, not an escaping exception. */
-async function readBody(res: Response): Promise<string> {
+async function readBody(res: Response, apiKey: string): Promise<string> {
   try {
     return await res.text();
   } catch (cause) {
-    const reason = excerpt(String(cause));
+    const reason = excerpt(redactKey(String(cause), apiKey));
     throw new LLMError("API_ERROR", `Gemini ${res.status} response body could not be read: ${reason}`);
   }
+}
+
+/** Every occurrence of the key replaced by [redacted]. Applied before excerpt, never after (D3). */
+function redactKey(text: string, apiKey: string): string {
+  return text.replaceAll(apiKey, "[redacted]");
 }
 
 /** At most MAX_EXCERPT_LENGTH characters, then "..." when the text was cut. */
