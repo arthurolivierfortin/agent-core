@@ -1,0 +1,50 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { loadRateFile } from "./rates.ts";
+
+// Rate file of the H2 report (#20): docs/specs/2026-09-30-h2-report-guards-design.md.
+
+const PRICED = { usdPerMillionTokensIn: 0.3, usdPerMillionTokensOut: 2.5 };
+const ENTRY = { rate: PRICED, effectiveFrom: "2026-09-30", source: "pricing page" };
+// JSON.stringify drops a key whose value is undefined: { source: undefined } removes the field.
+const withEntry = (patch: object) => JSON.stringify({ m: { ...ENTRY, ...patch } });
+const INFINITE_IN = `{"m":{"rate":{"usdPerMillionTokensIn":1e999,"usdPerMillionTokensOut":1},"effectiveFrom":"2026-09-30","source":"x"}}`;
+// The SyntaxError message depends on the V8 version: read it rather than copy it.
+const SYNTAX_ERROR = (() => { try { JSON.parse("{"); } catch (error) { return (error as SyntaxError).message; } })();
+
+test("TEST-2 (issue 20) a two-entry file gives the expected table", () => {
+  const text = JSON.stringify({ "local-model": { ...ENTRY, rate: null }, "hosted-model": ENTRY });
+  assert.deepEqual(loadRateFile(text), { "local-model": null, "hosted-model": PRICED });
+});
+
+test("TEST-2 (issue 20) a __proto__ key stays an own entry, never a prototype", () => {
+  const table = loadRateFile(`{"__proto__":${JSON.stringify(ENTRY)}}`);
+  assert.equal(Object.hasOwn(table, "__proto__"), true);
+  assert.equal(Object.getPrototypeOf(table), Object.prototype);
+  assert.deepEqual(Object.getOwnPropertyDescriptor(table, "__proto__")?.value, PRICED);
+});
+
+const DEFECTS: ReadonlyArray<readonly [string, string, string]> = [
+  ["unreadable JSON", "{", `rates: not valid JSON: ${SYNTAX_ERROR}`],
+  ["an array root", "[]", "rates: the root must be an object keyed by model id"],
+  ["a null root", "null", "rates: the root must be an object keyed by model id"],
+  ["an empty model id", JSON.stringify({ "": ENTRY }), "rates: a model id must not be empty"],
+  ["an entry that is not an object", JSON.stringify({ m: [] }), "rates['m']: must be an object"],
+  ["a missing field", withEntry({ source: undefined }), "rates['m']: missing field 'source'"],
+  ["an unexpected field", withEntry({ currency: "USD" }), "rates['m']: unexpected field 'currency'"],
+  ["a date that does not exist", withEntry({ effectiveFrom: "2026-02-30" }), "rates['m'].effectiveFrom: must be a real YYYY-MM-DD date"],
+  ["a date not in YYYY-MM-DD", withEntry({ effectiveFrom: "2026-9-30" }), "rates['m'].effectiveFrom: must be a real YYYY-MM-DD date"],
+  ["a blank source", withEntry({ source: "  " }), "rates['m'].source: must be a non-empty string"],
+  ["a rate neither null nor an object", withEntry({ rate: 1 }), "rates['m'].rate: must be null or an object"],
+  ["a missing rate field", withEntry({ rate: { usdPerMillionTokensIn: 1 } }), "rates['m'].rate: missing field 'usdPerMillionTokensOut'"],
+  ["an unexpected rate field", withEntry({ rate: { ...PRICED, currency: "USD" } }), "rates['m'].rate: unexpected field 'currency'"],
+  ["a negative price", withEntry({ rate: { ...PRICED, usdPerMillionTokensOut: -1 } }), "rates['m'].rate.usdPerMillionTokensOut: must be a finite number >= 0"],
+  ["a price that is not a number", withEntry({ rate: { ...PRICED, usdPerMillionTokensIn: "1" } }), "rates['m'].rate.usdPerMillionTokensIn: must be a finite number >= 0"],
+  ["an infinite price", INFINITE_IN, "rates['m'].rate.usdPerMillionTokensIn: must be a finite number >= 0"],
+];
+
+for (const [label, text, message] of DEFECTS) {
+  test(`TEST-2 (issue 20) refuses ${label}`, () => {
+    assert.throws(() => loadRateFile(text), { message });
+  });
+}
