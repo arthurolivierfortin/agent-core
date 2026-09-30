@@ -251,3 +251,38 @@ test("runMatrix sums each (scenario, combination) pair into one summary line, in
   const rows = lines.map((r) => [r.scenario, r.runs, r.passed, r.successRate]);
   assert.deepEqual(rows, [["aller aux reglages", 1, 1, 1], ["aller au profil", 1, 0, 0]]);
 });
+
+test("report.toJSON() hands back fresh plain data, keys in the order of the types, null kept null", async () => {
+  let t = 0;
+  const report = await matrix({
+    axes: { model: ["a", "b"] },
+    deps: ({ model }) => {
+      const landing: LLMResponse = { content: "tu y es", toolCalls: [] };
+      const responses = model === "a" ? [navigate(USAGE), text("tu y es", USAGE)] : [landing];
+      return wiring(new FakeLLMProvider({ responses }));
+    },
+    rates: { "fake-model": RATE },
+    now: () => (t += 10),
+  });
+
+  const json = report.toJSON();
+  assert.deepEqual(Object.keys(json), ["runs", "summary"]);
+  assert.notEqual(json.runs, report.runs);
+  assert.notEqual(json.summary, report.summary);
+  assert.notEqual(json.runs[0], report.runs[0]);
+  assert.notEqual(json.summary[0], report.summary[0]);
+  assert.notEqual(report.toJSON().runs, json.runs);
+  assert.deepEqual(json.runs, report.runs);
+  assert.deepEqual(json.summary, report.summary);
+  const runKeys = ["scenario", "combination", "run", "passed", "failures", "error", "durationMs", "tokensUsed", "costUsd", "trace"];
+  assert.deepEqual(Object.keys(json.runs[0]), runKeys);
+  assert.deepEqual(Object.keys(json.runs[0].trace), ["toolCalls", "finalState", "stopReason", "content", "responses"]);
+  const rowKeys = ["scenario", "combination", "runs", "passed", "successRate", "meanDurationMs", "tokensUsed", "costUsd"];
+  assert.deepEqual(Object.keys(json.summary[0]), rowKeys);
+
+  const parsed = JSON.parse(JSON.stringify(report));
+  assert.deepEqual(parsed, json);
+  assert.deepEqual([parsed.runs[0].costUsd, parsed.summary[0].costUsd], [6, 6]);
+  assert.deepEqual([parsed.runs[1].costUsd, parsed.runs[1].tokensUsed], [null, null]);
+  assert.deepEqual([parsed.summary[1].costUsd, parsed.summary[1].tokensUsed], [null, null]);
+});
