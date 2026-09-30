@@ -16,7 +16,7 @@
 // - H4: thoughtsTokenCount is not part of candidatesTokenCount; thinking is billed as output.
 //   Locked by "hypothesis H4: thoughtsTokenCount counts as output".
 
-import type { ToolDefinition } from "../../models/index.js";
+import type { Message, ToolDefinition } from "../../models/index.js";
 
 export type GeminiFunctionCall = { id?: string; name: string; args?: Record<string, unknown> };
 export type GeminiFunctionResponse = { name: string; response: { content: string } };
@@ -51,4 +51,23 @@ export const GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.co
  */
 export function geminiGenerateContentUrl(model: string, baseURL: string = GEMINI_DEFAULT_BASE_URL): string {
   return baseURL + "/v1beta/models/" + model + ":generateContent";
+}
+
+/**
+ * The generateContent body for a conversation. Synchronous and pure: #19 builds it before any
+ * fetch. Every system message, wherever it sits, goes to systemInstruction, joined by a blank line.
+ */
+export function toGeminiRequest(messages: Message[], tools?: ToolDefinition[]): GeminiRequest {
+  const systemTexts: string[] = [];
+  const contents: GeminiContent[] = [];
+  for (const message of messages) {
+    if (message.role === "system") {
+      systemTexts.push(message.content);
+    } else if (message.role === "user") {
+      contents.push({ role: "user", parts: [{ text: message.content }] });
+    }
+  }
+  const request: GeminiRequest = { contents };
+  if (systemTexts.length > 0) request.systemInstruction = { parts: [{ text: systemTexts.join("\n\n") }] };
+  return request;
 }
