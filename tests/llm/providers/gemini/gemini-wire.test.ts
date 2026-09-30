@@ -76,3 +76,36 @@ test("toGeminiRequest maps assistant messages to model contents with functionCal
     { role: "user", parts: [{ text: "ok" }] },
   ]);
 });
+
+test("hypothesis H2: tool results travel in a user content", () => {
+  const { contents } = toGeminiRequest([
+    user("go"),
+    { role: "assistant", content: "", toolCalls: [{ id: "call_0", name: "navigate", arguments: { page: "reglages" } }] },
+    { role: "tool", toolCallId: "call_0", content: "Navigated to 'reglages'." },
+    {
+      role: "assistant",
+      content: "",
+      toolCalls: [
+        { id: "call_0", name: "getCurrentPage", arguments: {} },
+        { id: "call_1", name: "navigate", arguments: { page: "accueil" } },
+      ],
+    },
+    { role: "tool", toolCallId: "call_0", content: "reglages" },
+    { role: "tool", toolCallId: "call_1", content: "Navigated to 'accueil'." },
+  ]);
+
+  assert.equal(contents.length, 5);
+  assert.deepStrictEqual(contents[2], {
+    role: "user",
+    parts: [{ functionResponse: { name: "navigate", response: { content: "Navigated to 'reglages'." } } }],
+  });
+  // The second call_0 resolves to getCurrentPage: the nearest assistant turn wins, since
+  // synthesized ids repeat from one turn to the next.
+  assert.deepStrictEqual(contents[4], {
+    role: "user",
+    parts: [
+      { functionResponse: { name: "getCurrentPage", response: { content: "reglages" } } },
+      { functionResponse: { name: "navigate", response: { content: "Navigated to 'accueil'." } } },
+    ],
+  });
+});

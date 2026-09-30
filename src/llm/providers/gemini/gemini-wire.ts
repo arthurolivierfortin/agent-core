@@ -56,18 +56,34 @@ export function geminiGenerateContentUrl(model: string, baseURL: string = GEMINI
 /**
  * The generateContent body for a conversation. Synchronous and pure: #19 builds it before any
  * fetch. Every system message, wherever it sits, goes to systemInstruction, joined by a blank line.
+ * Consecutive tool results share one user content (H2).
  */
 export function toGeminiRequest(messages: Message[], tools?: ToolDefinition[]): GeminiRequest {
   const systemTexts: string[] = [];
   const contents: GeminiContent[] = [];
-  for (const message of messages) {
+  // The last content added, as long as a tool message added it: the next tool result joins it.
+  let toolContent: GeminiContent | undefined;
+  for (const [index, message] of messages.entries()) {
     if (message.role === "system") {
       systemTexts.push(message.content);
     } else if (message.role === "user") {
       contents.push({ role: "user", parts: [{ text: message.content }] });
+      toolContent = undefined;
     } else if (message.role === "assistant") {
       const parts = modelParts(message.content, message.toolCalls);
-      if (parts.length > 0) contents.push({ role: "model", parts });
+      if (parts.length === 0) continue;
+      contents.push({ role: "model", parts });
+      toolContent = undefined;
+    } else {
+      const name = toolCallName(messages, index, message.toolCallId);
+      if (name === undefined) continue;
+      const part: GeminiPart = { functionResponse: { name, response: { content: message.content } } };
+      if (toolContent === undefined) {
+        toolContent = { role: "user", parts: [part] };
+        contents.push(toolContent);
+      } else {
+        toolContent.parts.push(part);
+      }
     }
   }
   const request: GeminiRequest = { contents };
@@ -84,4 +100,19 @@ function modelParts(content: string, toolCalls: ToolCall[] = []): GeminiPart[] {
   const parts: GeminiPart[] = content === "" ? [] : [{ text: content }];
   for (const call of toolCalls) parts.push({ functionCall: { name: call.name, args: call.arguments } });
   return parts;
+}
+
+/**
+ * The name of the toolCall a tool message answers, read in the nearest assistant message before it
+ * that carries that id: synthesized ids (call_0) repeat from one turn to the next, so the most
+ * recent wins. No id is sent back (H3), so the name is what ties the result to its call.
+ */
+function toolCallName(messages: Message[], index: number, toolCallId: string): string | undefined {
+  for (let i = index - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== "assistant") continue;
+    const call = message.toolCalls?.find((candidate) => candidate.id === toolCallId);
+    if (call !== undefined) return call.name;
+  }
+  return undefined;
 }
