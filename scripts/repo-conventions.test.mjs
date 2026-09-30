@@ -32,6 +32,15 @@ function checkEnvExample(relativePath, expectedNamed) {
   );
 }
 
+function leadingQuoteBlock(text) {
+  const block = [];
+  for (const line of splitLines(text)) {
+    if (!line.startsWith(">")) break;
+    block.push(line);
+  }
+  return block.join("\n");
+}
+
 test("TEST-1 .gitignore versionne docs/specs et docs/plans", () => {
   const gitignore = splitLines(readRepoFile(".gitignore"));
   assert.ok(!gitignore.includes("/docs/specs"), ".gitignore ignore encore /docs/specs");
@@ -52,4 +61,15 @@ test("TEST-2 .env.example nomme les variables sans valeur", () => {
 
 test("TEST-3 examples/web-chat/.env.example nomme les variables sans valeur", () => {
   checkEnvExample("examples/web-chat/.env.example", ["# VITE_OLLAMA_HOST=", "# VITE_OLLAMA_MODEL="]);
+});
+
+test("TEST-4 le guide porte la note d'origine", () => {
+  const guide = readRepoFile("docs/guide-agent-package.md");
+  assert.ok(splitLines(guide)[0].startsWith("> **Note d'origine"), "guide : première ligne sans note d'origine");
+  const note = leadingQuoteBlock(guide);
+  for (const expected of ["DEV-xxx", "Jira", "arthurolivierfortin/agent-core", "CONTRIBUTING.md", "dev-kit", "docs/specs/", "docs/plans/"]) {
+    assert.ok(note.includes(expected), `guide : note d'origine sans ${expected}`);
+  }
+  assert.ok(!note.includes("—"), "guide : tiret cadratin dans la note d'origine");
+  assert.ok(splitLines(guide).includes("# Claude Code Guidelines for nathan-agent-core"), "guide : titre d'origine disparu");
 });
