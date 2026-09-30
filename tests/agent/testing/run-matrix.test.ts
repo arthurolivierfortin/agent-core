@@ -87,3 +87,22 @@ test("runMatrix runs every scenario on every combination, runs times, in order; 
   assert.deepEqual(alone.runs.map((r) => r.combination), [{}]);
   assert.deepEqual(empty, [{}]);
 });
+
+test("runMatrix refuses options that would yield an empty or truncated report, before any run", async () => {
+  const cases: [Partial<Options>, string][] = [
+    [{ runs: 0 }, "runMatrix: runs must be an integer >= 1, got 0"],
+    [{ runs: 1.5 }, "runMatrix: runs must be an integer >= 1, got 1.5"],
+    [{ runs: NaN }, "runMatrix: runs must be an integer >= 1, got NaN"],
+    [{ scenarios: [] }, "runMatrix: scenarios must not be empty"],
+    [{ axes: { model: ["a"], memory: [] } }, "runMatrix: axis 'memory' has no value"],
+  ];
+  for (const [override, message] of cases) {
+    const calls = { deps: 0, env: 0 };
+    const env = () => { calls.env++; return app(); };
+    const deps = () => { calls.deps++; return script(text("ok"))(); };
+    const options = { scenarios: [scenario("aller aux reglages", "reglages", env)], axes: { model: ["a"] }, deps };
+
+    await assert.rejects(matrix({ ...options, ...override }), { name: "RangeError", message });
+    assert.deepEqual(calls, { deps: 0, env: 0 }, message);
+  }
+});

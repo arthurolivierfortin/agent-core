@@ -34,13 +34,22 @@ export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]
  * Run every scenario on every combination of `axes` (their Cartesian product, the last axis
  * varying fastest), `runs` times each, one after the other, and report every run in that order
  * (ADR-AGENT-0006). Sequential: a local provider serves one call at a time, and a fixed order
- * keeps a report against fakes reproducible.
+ * keeps a report against fakes reproducible. Options that would yield an empty report, which
+ * reads as "nothing failed", are refused before any run.
  *
  * Design: docs/specs/2026-09-30-run-matrix-design.md (#8).
  */
 export async function runMatrix<TState, TAxes extends Record<string, readonly unknown[]>>(
   options: MatrixOptions<TState, TAxes>,
 ): Promise<MatrixReport<TState, TAxes>> {
+  if (!Number.isInteger(options.runs) || options.runs < 1) {
+    throw new RangeError(`runMatrix: runs must be an integer >= 1, got ${options.runs}`);
+  }
+  if (options.scenarios.length === 0) throw new RangeError("runMatrix: scenarios must not be empty");
+  for (const name of Object.keys(options.axes)) {
+    if (options.axes[name].length === 0) throw new RangeError(`runMatrix: axis '${name}' has no value`);
+  }
+
   const runOne = async (scenario: Scenario<TState>, combination: Combination<TAxes>, run: number) => {
     const result = await runScenario(scenario, options.deps(combination));
     return { scenario: result.scenario, combination, run, passed: result.passed, failures: result.failures };
