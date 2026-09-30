@@ -21,6 +21,13 @@ import type { MetricsCollector } from "./metrics-collector.js";
  * `finally` records the call, no `catch` replaces its error. A `UsageRecord` cannot tell a failed
  * call from a resolved one, so counting it would skew both `calls` and `durationMs`.
  *
+ * It never streams, whatever the provider declares (pilot's decision, #11): `supportsStreaming()`
+ * returns `false` and the object has no `stream` key. The port requires `stream` as soon as
+ * `supportsStreaming()` is true, and delegating `stream` without measuring it would let calls
+ * escape the metrics in silence, a total that understates the run without saying so. The loop
+ * only ever calls `complete`. A measured provider that must stream will be a SPEC of its own,
+ * with its test, never a default `true` nor an unmeasured `stream`.
+ *
  * Design: docs/specs/2026-09-30-with-metrics-design.md (#11).
  */
 export function withMetrics(

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { withMetrics } from "../../../../dist/metrics/application/use-cases/with-metrics.js";
 import { MetricsCollector } from "../../../../dist/metrics/index.js";
-import { FakeLLMProvider } from "../../../../dist/testing/index.js";
+import { FakeLLMProvider, checkProviderContract } from "../../../../dist/testing/index.js";
 import { LLMError } from "../../../../dist/llm/index.js";
 import type { CompletionOptions, LLMProvider } from "../../../../dist/llm/interfaces/index.js";
 import type { LLMResponse, Message } from "../../../../dist/llm/models/index.js";
@@ -108,4 +108,41 @@ test("a failed call after a resolved one leaves the resolved one's record only",
       err instanceof Error && err.message.includes("no scripted response for call #2"),
   );
   assert.strictEqual(collector.records().length, 1);
+});
+
+test("the decorated fake passes the provider contract, and only its resolved call is recorded", async () => {
+  const collector = new MetricsCollector();
+  const decorated = withMetrics(
+    new FakeLLMProvider({
+      responses: [{ content: "hi", toolCalls: [], usage: { tokensIn: 1, tokensOut: 1 } }],
+    }),
+    collector,
+  );
+
+  const report = await checkProviderContract(decorated);
+
+  assert.strictEqual(report.ok, true, JSON.stringify(report.checks, null, 2));
+  const records = collector.records();
+  assert.strictEqual(records.length, 1);
+  assert.strictEqual(records[0].model, "fake-model");
+  assert.strictEqual(records[0].tokensIn, 1);
+  assert.strictEqual(records[0].tokensOut, 1);
+});
+
+test("a decorated provider never streams, even when the provider it wraps does", () => {
+  const streaming: LLMProvider = {
+    id: "streaming",
+    supportsStreaming: () => true,
+    models: () => [{ id: "streaming-model", supportsTools: false }],
+    complete: async () => ({ content: "", toolCalls: [] }),
+    async *stream() {
+      yield { contentDelta: "", done: true };
+    },
+  };
+
+  const decorated = withMetrics(streaming, new MetricsCollector());
+
+  assert.strictEqual(decorated.supportsStreaming(), false);
+  assert.strictEqual("stream" in decorated, false);
+  assert.deepEqual(Object.keys(decorated).sort(), ["complete", "id", "models", "supportsStreaming"]);
 });
