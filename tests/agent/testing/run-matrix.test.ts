@@ -286,3 +286,20 @@ test("report.toJSON() hands back fresh plain data, keys in the order of the type
   assert.deepEqual([parsed.runs[1].costUsd, parsed.runs[1].tokensUsed], [null, null]);
   assert.deepEqual([parsed.summary[1].costUsd, parsed.summary[1].tokensUsed], [null, null]);
 });
+
+test("a finalState predicate that throws fails its run with the error, and the matrix goes on", async () => {
+  const [r1, r2] = [navigate(), text("tu y es")];
+  const expect = { finalState: (): boolean => { throw new Error("predicate broke"); } };
+  const throwing = defineScenario({ name: "predicat qui leve", env: app, input: "amene-moi a la page reglages", expect });
+  const report = await matrix({ scenarios: [throwing, scenario("aller aux reglages", "reglages")], deps: script(r1, r2) });
+
+  const [thrown, next] = report.runs;
+  assert.deepEqual([thrown.passed, thrown.failures, thrown.error], [false, [], "predicate broke"]);
+  assert.equal(thrown.trace.finalState?.current, "reglages");
+  assert.equal(thrown.trace.responses.length, 2);
+  [r1, r2].forEach((response, i) => assert.equal(thrown.trace.responses[i], response));
+  assert.deepEqual(thrown.trace.toolCalls, r1.toolCalls);
+  assert.deepEqual([thrown.trace.stopReason, thrown.trace.content], [null, null]);
+  assert.deepEqual([next.passed, next.error], [true, null]);
+  assert.deepEqual(report.summary.map((r) => [r.passed, r.successRate]), [[0, 0], [1, 1]]);
+});
