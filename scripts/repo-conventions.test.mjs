@@ -49,3 +49,7 @@ test("TEST-1 .gitignore versionne docs/specs et docs/plans", () => {
 test("TEST-2 .env.example nomme les variables sans valeur", () => {
   checkEnvExample(".env.example", ["# LLM_PROVIDER=", "# OLLAMA_HOST=", "# OLLAMA_MODEL="]);
 });
+
+test("TEST-3 examples/web-chat/.env.example nomme les variables sans valeur", () => {
+  checkEnvExample("examples/web-chat/.env.example", ["# VITE_OLLAMA_HOST=", "# VITE_OLLAMA_MODEL="]);
+});
