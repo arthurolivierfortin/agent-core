@@ -26,6 +26,10 @@ export type CapGuard = LLMProvider & {
  * adds up the numeric costs only, so that one unknown cost never masks it with null.
  */
 export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number): CapGuard {
+  // Before anything else: "1" passed as a number, NaN or Infinity would make every check below lie.
+  if (typeof capUsd !== "number" || !Number.isFinite(capUsd) || capUsd <= 0) {
+    throw new RangeError(`capGuard: capUsd must be a finite number > 0, got ${String(capUsd)}`);
+  }
   let spent = 0;
   let refusals = 0;
   let cut: CutReason | null = null;

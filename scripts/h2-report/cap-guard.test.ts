@@ -52,3 +52,15 @@ test("TEST-1 (issue 35) seven own keys, no stream, and each priced call added to
   assert.equal(guard.spentUsd(), 1);
   assert.equal(double.count(), 2);
 });
+
+test("TEST-2 (issue 35) a capUsd that is not a finite number > 0 throws a RangeError before any call", () => {
+  const double = scripted([PRICED]);
+  for (const capUsd of [0, -1, NaN, Infinity, "1" as unknown as number]) {
+    assert.throws(() => capGuard(double.provider, RATES, capUsd), {
+      name: "RangeError",
+      message: `capGuard: capUsd must be a finite number > 0, got ${String(capUsd)}`,
+    });
+  }
+  assert.doesNotThrow(() => capGuard(double.provider, RATES, 0.01));
+  assert.equal(double.count(), 0);
+});
