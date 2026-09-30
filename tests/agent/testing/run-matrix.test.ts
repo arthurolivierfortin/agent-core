@@ -352,3 +352,22 @@ test("report.toRunsCSV() writes one line per run: failures joined, a thrown erro
       'aller aux reglages,b,,1,false,,"no ""b"", sorry",10,0,,\r\n',
   );
 });
+
+test("report.toJSON() copies each run's combination, failures and trace, and each line's combination", async () => {
+  const report = await matrix({ axes: { model: ["a"] }, deps: script(text("non")) });
+  const json = report.toJSON();
+  const [run, copy] = [report.runs[0], json.runs[0]];
+  const pairs = [
+    [copy.combination, run.combination],
+    [copy.failures, run.failures],
+    [copy.trace, run.trace],
+    [copy.trace.toolCalls, run.trace.toolCalls],
+    [copy.trace.responses, run.trace.responses],
+    [json.summary[0].combination, report.summary[0].combination],
+  ];
+  for (const [fresh, original] of pairs) {
+    assert.notEqual(fresh, original);
+    assert.deepEqual(fresh, original);
+  }
+  assert.deepEqual([copy.combination, copy.failures], [{ model: "a" }, ["finalState: predicate returned false"]]);
+});
