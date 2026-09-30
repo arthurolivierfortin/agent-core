@@ -8,7 +8,7 @@ The reasoning behind each choice is in `docs/decisions/`. The V1 PR breakdown is
 
 ## Target consumer
 
-The package first serves **NATHAN's accessible IDE** (project ADR-0006, Flux E): a voice assistant for blind people, able to **navigate the application and write in it**. The agent translates dictation into MicroPython.
+The reference consumer is **Marcel**: its agent block (milestone J8) imports this package, and its first consumption, J8.1, is tracked by #4 (milestone H3).
 
 Permanent constraint, stated by the team:
 

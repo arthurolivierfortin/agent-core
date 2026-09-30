@@ -41,6 +41,15 @@ function leadingQuoteBlock(text) {
   return block.join("\n");
 }
 
+function sectionAfterHeading(text, heading) {
+  const lines = splitLines(text);
+  const start = lines.indexOf(heading);
+  assert.notEqual(start, -1, `titre absent : ${heading}`);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => line.startsWith("## "));
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n");
+}
+
 test("TEST-1 .gitignore versionne docs/specs et docs/plans", () => {
   const gitignore = splitLines(readRepoFile(".gitignore"));
   assert.ok(!gitignore.includes("/docs/specs"), ".gitignore ignore encore /docs/specs");
@@ -95,4 +104,15 @@ test("TEST-7 ROADMAP : le cycle se fait avec Marcel", () => {
     assert.ok(!roadmap.includes(gone), `ROADMAP contient encore ${gone}`);
   }
   assert.ok(!/\bS7\b/.test(roadmap), "ROADMAP contient encore S7");
+});
+
+test("TEST-6 ROADMAP : Marcel est le consommateur de référence", () => {
+  const roadmap = readRepoFile("ROADMAP.md");
+  const consumer = sectionAfterHeading(roadmap, "## Target consumer");
+  for (const expected of ["Marcel", "#4 (milestone H3)", "No overhead. It must stay maintainable."]) {
+    assert.ok(consumer.includes(expected), `section Target consumer sans ${expected}`);
+  }
+  for (const gone of ["NATHAN", "Flux E", "MicroPython", "ADR-0006"]) {
+    assert.ok(!roadmap.includes(gone), `ROADMAP contient encore ${gone}`);
+  }
 });
