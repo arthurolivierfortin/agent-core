@@ -3,3 +3,4 @@
 export * from "./models/index.js";
 export * from "./services/aggregate.js";
 export * from "./application/use-cases/metrics-collector.js";
+export * from "./application/use-cases/with-metrics.js";

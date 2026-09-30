@@ -196,13 +196,14 @@ test("`.` exposes the loop's contracts and the types a run needs", async () => {
 
 test("`.` exposes the metrics framework, and neither `./llm` nor `./testing` carries it", () => {
   const surface = root as Record<string, unknown>;
-  for (const name of ["aggregate", "MetricsCollector"]) {
+  for (const name of ["aggregate", "MetricsCollector", "withMetrics"]) {
     assert.equal(typeof surface[name], "function", `missing ${name}`);
   }
   for (const barrel of [llm, testing]) {
     const other = barrel as Record<string, unknown>;
     assert.equal(other.aggregate, undefined);
     assert.equal(other.MetricsCollector, undefined);
+    assert.equal(other.withMetrics, undefined);
   }
 });
 
@@ -221,4 +222,21 @@ test("`.` exposes the metrics types a caller needs to record and price calls", (
 
   assert.equal(fromCollector.calls, 1);
   assert.equal(fromFunction.calls, 1);
+});
+
+// Same reasoning as the type tests above: what `withMetrics` returns is a type, so `node --test`
+// cannot see it drift from the port. Annotating it `LLMProvider` pins it under `npm run typecheck`,
+// and the record proves the decorator served by `.` really measures.
+test("`.` exposes withMetrics, and what it returns is still an LLMProvider", async () => {
+  const collector = new root.MetricsCollector();
+  const measured: LLMProvider = root.withMetrics(
+    new testing.FakeLLMProvider({ responses: [{ content: "ok", toolCalls: [] }] }),
+    collector,
+  );
+
+  await measured.complete([{ role: "user", content: "hi" }], {
+    model: testing.FakeLLMProvider.MODEL_ID,
+  });
+
+  assert.equal(collector.records().length, 1);
 });
