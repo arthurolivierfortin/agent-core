@@ -5,6 +5,8 @@ import {
   geminiGenerateContentUrl,
   toGeminiRequest,
 } from "../../../../dist/llm/providers/gemini/gemini-wire.js";
+import { toToolDefinition } from "../../../../dist/index.js";
+import { fakeApp } from "../../../../dist/testing/index.js";
 
 // The double of this file is the response bodies written below as literals: no network, no hosted
 // provider. The model named in them is gemini-2.5-flash.
@@ -135,4 +137,22 @@ test("toGeminiRequest throws API_ERROR, synchronously, on a toolCallId no preced
       ]),
     apiError(/call_0/),
   );
+});
+
+test("toGeminiRequest declares tools as functionDeclarations, parameters omitted when the schema has no property", () => {
+  const defs = fakeApp({ pages: ["accueil", "reglages"], current: "accueil" }).tools.map(toToolDefinition);
+
+  const { tools } = toGeminiRequest([user("go")], defs);
+
+  assert.deepStrictEqual(tools, [
+    {
+      functionDeclarations: [
+        { name: "navigate", description: "Navigate to a page of the application by name.", parameters: defs[0].parameters },
+        { name: "getCurrentPage", description: "Return the name of the page currently displayed." },
+      ],
+    },
+  ]);
+  assert.equal("parameters" in tools![0].functionDeclarations[1], false);
+  assert.equal("tools" in toGeminiRequest([user("go")]), false);
+  assert.equal("tools" in toGeminiRequest([user("go")], []), false);
 });

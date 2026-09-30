@@ -95,6 +95,9 @@ export function toGeminiRequest(messages: Message[], tools?: ToolDefinition[]): 
   }
   const request: GeminiRequest = { contents };
   if (systemTexts.length > 0) request.systemInstruction = { parts: [{ text: systemTexts.join("\n\n") }] };
+  if (tools !== undefined && tools.length > 0) {
+    request.tools = [{ functionDeclarations: tools.map(toFunctionDeclaration) }];
+  }
   return request;
 }
 
@@ -122,4 +125,15 @@ function toolCallName(messages: Message[], index: number, toolCallId: string): s
     if (call !== undefined) return call.name;
   }
   return undefined;
+}
+
+/**
+ * A tool as Gemini declares it. The schema is passed as it is, lowercase JSON Schema types
+ * included (no conversion to OpenAPI uppercase), and omitted when it has no property: Gemini is
+ * assumed to refuse an object schema without properties. Neither point is verified yet.
+ */
+function toFunctionDeclaration(tool: ToolDefinition): GeminiFunctionDeclaration {
+  const declaration: GeminiFunctionDeclaration = { name: tool.name, description: tool.description };
+  if (Object.keys(tool.parameters.properties).length > 0) declaration.parameters = tool.parameters;
+  return declaration;
 }
