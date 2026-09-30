@@ -375,3 +375,13 @@ test("TEST-5 (issue 26) le guide documente Gemini et son test d'intégration", (
   }
   assert.doesNotMatch(guide, GOOGLE_KEY_SHAPE);
 });
+
+test("TEST-1 (issue 20) tsconfig.json vérifie scripts/, tsconfig.build.json ne le compile pas", () => {
+  const typecheck = JSON.parse(readRepoFile("tsconfig.json"));
+  assert.deepEqual(typecheck.include, ["src", "tests", "scripts"]);
+  assert.equal(typecheck.compilerOptions.allowImportingTsExtensions, true);
+  const build = JSON.parse(readRepoFile("tsconfig.build.json"));
+  assert.deepEqual(build.include, ["src"]);
+  assert.equal(build.compilerOptions.rootDir, "src");
+  assert.equal(build.compilerOptions.allowImportingTsExtensions, false);
+});
