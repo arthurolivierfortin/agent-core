@@ -280,7 +280,7 @@ function unreadableFetch(status: number, error: unknown): typeof fetch {
   return (async () => res as unknown as Response) as unknown as typeof fetch;
 }
 
-type TransportError = Error & { code: string };
+type TransportError = Error & { code: string; status?: number; retryAfterMs?: number };
 
 /** complete() under this key, and this baseURL when given, rejects with an LLMError of exactly this code and message, returned. */
 async function expectFailure(fetchFn: typeof fetch, code: string, message: string, key = "cle-factice-1", baseURL?: string) {
@@ -501,3 +501,83 @@ for (const { title, fetch: fetchFn, baseURL, code, message } of REDACTION_CASES)
     assert.doesNotMatch(exposed(error), /cle-/);
   });
 }
+
+// HTTP status (#34). Every LLMError of a non-ok response carries status, even when its body cannot
+// be read; a rejected fetch, an ok response and a missing key carry none.
+
+const QUOTA_BODY = JSON.stringify({ error: { code: 429, message: "Quota exceeded.", status: "RESOURCE_EXHAUSTED" } });
+const QUOTA_MESSAGE = `Gemini 429 RESOURCE_EXHAUSTED from ${ENDPOINT}: Quota exceeded.`;
+const NOT_FOUND_TEXT = "models/gemini-2.5-flash is not found for API version v1beta, or is not supported for generateContent.";
+const NOT_FOUND_BODY = JSON.stringify({ error: { code: 404, message: NOT_FOUND_TEXT, status: "NOT_FOUND" } });
+const NOT_FOUND_MESSAGE = `Gemini has no model 'gemini-2.5-flash' (404 NOT_FOUND from ${ENDPOINT}): ${NOT_FOUND_TEXT}`;
+
+/** Neither field is an own property of the error: absent, not merely undefined (#34, D2). */
+function assertNoHttpFields(error: TransportError): void {
+  assert.equal(Object.hasOwn(error, "status"), false);
+  assert.equal(Object.hasOwn(error, "retryAfterMs"), false);
+}
+
+test("every LLMError of a non-ok response carries its status, 404 NOT_FOUND included", async () => {
+  const quota = await expectFailure(respondingFetch(429, QUOTA_BODY).fetch, "API_ERROR", QUOTA_MESSAGE);
+  assert.equal(quota.status, 429);
+  const noModel = await expectFailure(respondingFetch(404, NOT_FOUND_BODY).fetch, "MODEL_NOT_FOUND", NOT_FOUND_MESSAGE);
+  assert.equal(noModel.status, 404);
+  const wrongBase = await expectFailure(
+    respondingFetch(404, "<html>Not Found</html>").fetch,
+    "API_ERROR",
+    `Gemini 404 from ${ENDPOINT} (check baseURL: host root, without /v1beta): <html>Not Found</html>`,
+  );
+  assert.equal(wrongBase.status, 404);
+  const invalid = { error: { code: 400, message: "Invalid JSON payload received.", status: "INVALID_ARGUMENT" } };
+  const badRequest = await expectFailure(
+    respondingFetch(400, JSON.stringify(invalid)).fetch,
+    "API_ERROR",
+    `Gemini 400 INVALID_ARGUMENT from ${ENDPOINT}: Invalid JSON payload received.`,
+  );
+  assert.equal(badRequest.status, 400);
+  const empty = await expectFailure(
+    respondingFetch(503, "").fetch,
+    "API_ERROR",
+    `Gemini 503 from ${ENDPOINT}: (empty body)`,
+  );
+  assert.equal(empty.status, 503);
+});
+
+test("an error body that cannot be read keeps the status of its response", async () => {
+  for (const status of [429, 500]) {
+    const error = await expectFailure(
+      unreadableFetch(status, new Error("socket closed")),
+      "API_ERROR",
+      `Gemini ${status} response body could not be read: Error: socket closed`,
+    );
+    assert.equal(error.status, status);
+  }
+});
+
+test("a rejected fetch, an ok response and a missing key carry neither status nor retryAfterMs", async () => {
+  const failures = [
+    await expectFailure(
+      rejectingFetch(new TypeError("fetch failed")),
+      "API_ERROR",
+      `Gemini request to ${ENDPOINT} failed: TypeError: fetch failed`,
+    ),
+    await expectFailure(
+      unreadableFetch(200, new Error("socket closed")),
+      "API_ERROR",
+      "Gemini 200 response body could not be read: Error: socket closed",
+    ),
+    await expectFailure(respondingFetch(200, "not json").fetch, "API_ERROR", "Gemini 200 response is not JSON: not json"),
+    await expectFailure(
+      respondingFetch(200, JSON.stringify({ promptFeedback: { blockReason: "SAFETY" } })).fetch,
+      "API_ERROR",
+      "Gemini returned no candidate (promptFeedback.blockReason: SAFETY)",
+    ),
+    await expectFailure(
+      unreachableFetch().fetch,
+      "MISSING_API_KEY",
+      "Gemini API key missing: environment variable AGENT_CORE_TEST_GEMINI_KEY is unset or empty",
+      "",
+    ),
+  ];
+  for (const error of failures) assertNoHttpFields(error);
+});
