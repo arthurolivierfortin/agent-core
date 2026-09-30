@@ -17,8 +17,18 @@ Spécification : docs/specs/2026-09-30-llm-error-status-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **H9** (spécification) · Gemini signale un délai de nouvelle tentative par un en-tête `Retry-After` en secondes entières sur ses réponses 429 ou 503. Non vérifiée contre l'API réelle ; il est plausible que Gemini ne l'envoie pas et porte le délai dans `error.details[]` (`google.rpc.RetryInfo`, `retryDelay` du type `"30s"`). Conséquence si H9 est fausse : `retryAfterMs` reste absent sur les erreurs Gemini, `status` 429 reste posé ; #35 ne doit pas dépendre de `retryAfterMs` pour classer une coupure. Aucun test de ce plan ne touche l'API réelle.
+- [H] **H7, H8** (#25) et **H1, H5, H6** (#18, #19) · Restent en l'état, non vérifiées ; H5, H7 et H8 gardent leur test verrou, inchangé.
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1 (spécification, précédents de #18, #19 et #25).
+- [H] **P2** · La ligne d'en-tête de SPEC-2 est insérée après la l.5, fin de la phrase sur #25 commencée à la l.3 (« après la ligne qui renvoie à #25 » de la spécification), avant la ligne `// Served by ./llm …` ; celle de SPEC-3 juste après elle. Les deux sont recopiées au caractère près de la checklist, chacune sur une seule ligne, bien que celle de SPEC-2 fasse 208 colonnes (le fichier n'a pas de formateur ; un retour à la ligne rendrait la ligne prescrite introuvable par recherche exacte). H9 n'est pas ajoutée à la liste « Hypotheses not yet verified … each locked by a test » de l'en-tête : aucun test ne la verrouille, et la checklist ne prescrit que la ligne `retryAfterMs comes from …`.
+- [H] **P3** · Découpage et titres des tests choisis par ce plan : TEST-1 en quatre `test()` ((a) ; (b) ; (c) ; (d) et (e)), TEST-2 en trois ((a) à (e) ; (f) et (g) en boucle sur `[429, 500]` ; (h) à (l)), TEST-3 en quatre ((a), (b), (c) et (h) ; (d) et (e) ; (f) et (i) ; (g)). Un test qui regroupe des cas s'arrête au premier échec.
+- [H] **P4** · Tests déjà verts avant leur SPEC, qui verrouillent une frontière (précédent P4 de #25) : TEST-1 (a) à l'exécution (le rouge de la tâche 1 est porté par (b) à (e) et par le typecheck) ; le troisième test de TEST-2 ((h) à (l)) ; les trois derniers tests de TEST-3 ((d), (e), (f), (g), (i)).
+- [H] **P5** · Aides et constantes de test ajoutées : `QUOTA_BODY`, `QUOTA_MESSAGE`, `NOT_FOUND_TEXT`, `NOT_FOUND_BODY`, `NOT_FOUND_MESSAGE`, `assertNoHttpFields(error)` (vérifie `Object.hasOwn(error, "status") === false` et `Object.hasOwn(error, "retryAfterMs") === false`). Les aides existantes (`withEnv`, `expectFailure`, `ENDPOINT`, `respondingFetch`, `unreadableFetch`, `unreachableFetch`, `rejectingFetch`, `exposed`, `PLANTED_KEY`, `KEY_VAR`, `DECLARED`, `MODEL`) sont réutilisées. « `error.cause === cause` » et « `instanceof Error` » de TEST-1 se vérifient par `assert.equal` (strict, `node:assert/strict`) et `assert.ok`.
+- [H] **P6** · Les deux doubles reçoivent `headers` dans les éditions de test de la tâche 3 (commit de SPEC-3, « au plus tard » permis par la spécification), avant l'édition de code qui fait lire `res.headers` à `httpError` : aucun commit n'a de test rouge.
+- [H] **P7** · Noms locaux, formes et commentaires choisis par ce plan dans le cadre de la spécification : `http`, `raw`, `value`, `ms` ; commentaires en anglais qui citent « #34 » (et « #34, D2 » / « #34, D4 » pour les décisions de cette spécification, pour ne pas les confondre avec les D2 à D8 de #25 que cite déjà le module) ; `readBody` et le `return` de `MODEL_NOT_FOUND` écrits sur plusieurs lignes au-delà de 120 colonnes, messages inchangés au caractère près ; commentaire de la forme `super(message, options)` : « Error reads the cause key only ». Le même objet `http` est passé à `readBody` et aux trois constructeurs : `LLMError` en copie les valeurs et `Error` n'en garde que `cause`, absente, donc aucun partage observable.
+- [H] **P8** · Taille : 275 lignes ajoutées mesurées contre environ 204 estimées (fourchette 165 à 260), sous le seuil de 400, sans dérogation.
