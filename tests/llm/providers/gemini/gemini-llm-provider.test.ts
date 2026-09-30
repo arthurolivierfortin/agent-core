@@ -329,6 +329,13 @@ test("a 404 that carries no Gemini error points at baseURL", async () => {
   assert.equal(double.count(), 1);
 });
 
+// Fixed as it is (R1 of #26): the body is not empty, only its error.message is.
+test("an error body whose error.message is empty is labelled (empty body)", async () => {
+  const double = respondingFetch(400, JSON.stringify({ error: { code: 400, message: "", status: "INVALID_ARGUMENT" } }));
+  await expectFailure(double.fetch, "API_ERROR", `Gemini 400 INVALID_ARGUMENT from ${ENDPOINT}: (empty body)`);
+  assert.equal(double.count(), 1);
+});
+
 test("an error body that cannot be read is an API_ERROR with the status", async () => {
   await expectFailure(
     unreadableFetch(500, new Error("socket closed")),
