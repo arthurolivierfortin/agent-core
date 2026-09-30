@@ -208,3 +208,39 @@ test("TEST-2 (issue 7) CLAUDE.md ne rapporte les clés DEV-xxx qu'aux ADR", () =
     "docs/decisions/ : aucun ADR ne cite de clé DEV-NNN, CLAUDE.md ne doit plus les rapporter aux ADR",
   );
 });
+
+test("TEST-3 (issue 7) le manifeste déclare la dérogation de langue", () => {
+  const lines = splitLines(readRepoFile("CLAUDE.md"));
+  const start = lines.indexOf("<!-- core-project");
+  const end = lines.indexOf("-->");
+  assert.ok(start !== -1 && end > start, "CLAUDE.md : bloc <!-- core-project ... --> introuvable");
+  const block = lines.slice(start + 1, end);
+  assert.ok(!block.includes("derogations: []"), "CLAUDE.md : le manifeste déclare encore derogations: []");
+  const at = block.indexOf("derogations:");
+  assert.notEqual(at, -1, "CLAUDE.md : ligne derogations: absente du manifeste");
+  assert.equal(block[at + 1], "  - rule: core/langue", "CLAUDE.md : derogations: n'est pas suivi de la règle core/langue");
+  const reason = block[at + 2] ?? "";
+  assert.ok(reason.startsWith('    reason: "') && reason.endsWith('"'), "CLAUDE.md : la ligne reason n'est pas entre guillemets doubles");
+  assert.equal(reason.split('"').length - 1, 2, "CLAUDE.md : guillemet double dans le texte de reason");
+  assert.ok(!reason.slice(4).includes("  "), "CLAUDE.md : deux espaces consécutifs dans reason");
+  for (const expected of [
+    "anglais",
+    "français",
+    "README.md",
+    "ROADMAP.md",
+    "docs/guide-agent-package.md",
+    "docs/decisions/",
+    "docs/plans/2026-07-21-v1-decoupage-pr.md",
+    "#7",
+  ]) {
+    assert.ok(reason.includes(expected), `CLAUDE.md : reason de la dérogation sans ${expected}`);
+  }
+  assert.equal(block[at + 3], "    revue_le: 2026-12-31", "CLAUDE.md : revue_le de la dérogation absent ou différent");
+  for (const gate of [
+    "  - id: GATE-1  name: build  cmd: npm run build",
+    "  - id: GATE-2  name: typecheck  cmd: npm run typecheck",
+    "  - id: GATE-3  name: test  cmd: npm run test",
+  ]) {
+    assert.ok(block.includes(gate), `CLAUDE.md : gate perdu dans le manifeste : ${gate.trim()}`);
+  }
+});
