@@ -289,7 +289,7 @@ Format hypotheses, not yet verified against the real API, each locked by a test 
 
 The unit suites never reach the network. `tests/integration/gemini.integration.test.ts` runs `checkProviderContract` on `PROVIDERS.gemini()` against the live API, and is skipped unless `GEMINI_INTEGRATION=1`; `scripts/repo-conventions.test.mjs` checks that the default suite skips it. Launching it is a manual step: no test suite and no agent loop runs it. With `GEMINI_API_KEY` already in the shell's environment, never written in a command or a file, from the repository root:
 
-- PowerShell (5.1 and 7): `npm run build; if ($LASTEXITCODE -eq 0) { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts; Remove-Item Env:GEMINI_INTEGRATION }`
+- PowerShell (5.1 and 7): `npm run build; if ($LASTEXITCODE -eq 0) { try { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts } finally { Remove-Item Env:GEMINI_INTEGRATION -ErrorAction SilentlyContinue } }`
 - bash: `npm run build && GEMINI_INTEGRATION=1 node --test tests/integration/gemini.integration.test.ts`
 
 It makes one real call (prompt `ping`, no tool) and checks the port's shape, with no stream check. A success corroborates H1, and by construction H5 and H6. H2, H3 and H4 wait for the first real report (#20); H7 and H8 are not exercised, since no real error path is provoked.

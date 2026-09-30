@@ -335,7 +335,7 @@ const GEMINI_DOC_EXPECTED = [
   "`GEMINI_INTEGRATION=1`",
   "`checkProviderContract`",
   "#20",
-  'npm run build; if ($LASTEXITCODE -eq 0) { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts; Remove-Item Env:GEMINI_INTEGRATION }',
+  'npm run build; if ($LASTEXITCODE -eq 0) { try { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts } finally { Remove-Item Env:GEMINI_INTEGRATION -ErrorAction SilentlyContinue } }',
   "npm run build && GEMINI_INTEGRATION=1 node --test tests/integration/gemini.integration.test.ts",
 ];
 

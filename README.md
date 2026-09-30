@@ -409,7 +409,7 @@ Prerequisite: `GEMINI_API_KEY` is already in the shell's environment, set outsid
 Then, from the repository root, in PowerShell (5.1 and 7):
 
 ```
-npm run build; if ($LASTEXITCODE -eq 0) { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts; Remove-Item Env:GEMINI_INTEGRATION }
+npm run build; if ($LASTEXITCODE -eq 0) { try { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts } finally { Remove-Item Env:GEMINI_INTEGRATION -ErrorAction SilentlyContinue } }
 ```
 
 or in bash:
