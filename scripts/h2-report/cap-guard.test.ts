@@ -255,3 +255,20 @@ test("TEST-3 (issue 39) a status of 600, above the HTTP range, cuts the matrix a
   assert.equal(double.count(), 2);
   assert.equal(guard.refused(), 1);
 });
+
+const INFINITE_RATES: ReadonlyArray<readonly [string, RateTable]> = [
+  ["an input price of Infinity", { [MODEL]: { ...HOSTED_RATE, usdPerMillionTokensIn: Infinity } }],
+  ["an output price of Infinity", { [MODEL]: { ...HOSTED_RATE, usdPerMillionTokensOut: Infinity } }],
+];
+
+for (const [title, rates] of INFINITE_RATES) {
+  test(`TEST-4 (issue 39) ${title} cuts the matrix before the provider is called (unpriced_model)`, async () => {
+    const double = scripted([PRICED]);
+    const guard = capGuard(double.provider, rates, 10);
+    const outcome = await settle(guard.complete(HI, OPTS));
+    assert.deepEqual(
+      [outcome, double.count(), guard.cutReason(), guard.refused(), guard.spentUsd()],
+      [cutMessage(MODEL, "unpriced_model"), 0, "unpriced_model", 1, 0],
+    );
+  });
+}
