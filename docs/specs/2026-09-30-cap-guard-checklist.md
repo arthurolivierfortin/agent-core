@@ -31,8 +31,20 @@ Spécification : docs/specs/2026-09-30-cap-guard-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **R-1** (spécification) · `network` couvre toute `LLMError` sans `status`, conséquence de la classification sur `status` seulement : une réponse Gemini 200 au corps illisible, non JSON ou refusé par `fromGeminiResponse` est classée `network` bien qu'aucun réseau ne soit en cause (de même `MISSING_API_KEY` et un modèle non déclaré, écartés avant le premier appel par `assertReadyToStart` et par la configuration du runner). Le TSDoc de `capGuard` l'écrit ; #33 le lira comme « aucun statut HTTP rapporté ». Écarté par la consigne du pilote : lire `code`.
+- [H] **H9** (#34) · Reste non vérifiée ; sans effet ici, `retryAfterMs` n'entre pas dans la classification (TEST-6 le verrouille : 429 avec et sans `retryAfterMs` → `rate_limited`, 503 avec `retryAfterMs` → `http_503`).
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1 (spécification, précédent P1 de #20).
+- [H] **P2** · Le contrôle « coupure posée » (premier contrôle, `the matrix is cut (<raison>)`) entre dans le commit de SPEC-5, pas de SPEC-6 : le second test de TEST-5 (appel à `priced-model` refusé après la coupure `unpriced_model`) l'exige. La tâche 6 n'ajoute que la classification (`classifyCut`) et la pose de la coupure au rejet ; le rouge de TEST-6 reste celui de la spécification (`cutReason()` `null` après un rejet).
+- [H] **P3** · Le TSDoc de `capGuard` porte le sens exact de `network` à partir de la tâche 6 (où la classification apparaît), pas dès la tâche 1 ; le reste de son TSDoc (instance unique, construite par #33, placée sous `withMetrics`, jamais de flux) est écrit à la tâche 1.
+- [H] **P4** · Coupure posée par `cut ??= …` (rejet et réponse sans usage) : « si aucune ne l'est déjà » de SPEC-6 écrit au plus près, bien que la sérialisation et le premier contrôle rendent le cas impossible. Refus factorisés dans une fermeture `refuse(model, why): never` qui incrémente `refused()` et lève `Error("capGuard refused a call to '<model>': <why>")`.
+- [H] **P5** · Doubles et noms de test choisis par ce plan : `scripted(steps, streaming = false)` rejoue ses étapes puis répète la dernière (un appel de trop au fournisseur se voit comme une réponse de plus, d'où les rouges `Missing expected rejection`) ; `deferred()` retient ses appels jusqu'à `resolveFirst` ; constantes `MODEL`, `HOSTED_RATE`, `RATES`, `MODELS`, `HI`, `OPTS`, `PRICED_RESPONSE`, `PRICED`, `Step`, `capMessage`, `cutMessage`, `UNPRICED_TABLES`, `REJECTIONS` ; identifiant du double `hosted-double`. Titres en anglais pour `scripts/h2-report/` et le test Gemini (comme leurs voisins), en français pour `scripts/repo-conventions.test.mjs` ; tous préfixés `TEST-N (issue 35)`, y compris TEST-9 dans un fichier dont les titres n'ont pas de préfixe (la spécification exige le préfixe).
+- [H] **P6** · Découpage des tests : TEST-1, TEST-2, TEST-4, TEST-7 à TEST-10 en un `test()` chacun ; TEST-3 en deux (plafond 1, plafond 0,75) ; TEST-5 en sept (six tables, un test de la coupure qui refuse `priced-model`) ; TEST-6 en treize (une ligne de table chacun). Total 29 tests ajoutés (295 → 324).
+- [H] **P7** · `--runs` : la condition élargie tient sur trois lignes (`if`, `throw`, `}`) au lieu d'une, pour rester lisible ; `--cap-usd` reçoit un commentaire d'une ligne qui cite #35. Messages inchangés au caractère près.
+- [H] **P8** · Longueurs : les sujets de SPEC-2 et SPEC-10 font 65 et 63 caractères (la spécification écrivait 66 et 64) ; tous restent sous 72. Les lignes de l'en-tête Gemini après la coupe font 98, 98 et 16 colonnes (mesurées) ; les l.2 (102) et l.10 (118, ancienne l.8) restent au-delà de 100, hors périmètre. Plusieurs lignes de `cap-guard.ts` et `cap-guard.test.ts` dépassent 100 colonnes (au plus 120) : le dépôt n'a ni formateur ni linter, et ses fichiers voisins en ont autant.
+- [H] **P9** · Taille : 356 lignes ajoutées mesurées contre environ 278 estimées (fourchette 230 à 340), sous le seuil de 400, sans dérogation.
+- [H] **Node** · Node local ≥ 22.18 (retrait de types sans drapeau), constaté v22.19.0.
