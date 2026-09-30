@@ -16,6 +16,7 @@
 // - H4: thoughtsTokenCount is not part of candidatesTokenCount; thinking is billed as output.
 //   Locked by "hypothesis H4: thoughtsTokenCount counts as output".
 
+import { LLMError } from "../../models/index.js";
 import type { Message, ToolCall, ToolDefinition } from "../../models/index.js";
 
 export type GeminiFunctionCall = { id?: string; name: string; args?: Record<string, unknown> };
@@ -56,7 +57,8 @@ export function geminiGenerateContentUrl(model: string, baseURL: string = GEMINI
 /**
  * The generateContent body for a conversation. Synchronous and pure: #19 builds it before any
  * fetch. Every system message, wherever it sits, goes to systemInstruction, joined by a blank line.
- * Consecutive tool results share one user content (H2).
+ * Consecutive tool results share one user content (H2). A tool message whose toolCallId no earlier
+ * assistant toolCall carries throws API_ERROR, before any network call.
  */
 export function toGeminiRequest(messages: Message[], tools?: ToolDefinition[]): GeminiRequest {
   const systemTexts: string[] = [];
@@ -76,7 +78,12 @@ export function toGeminiRequest(messages: Message[], tools?: ToolDefinition[]): 
       toolContent = undefined;
     } else {
       const name = toolCallName(messages, index, message.toolCallId);
-      if (name === undefined) continue;
+      if (name === undefined) {
+        throw new LLMError(
+          "API_ERROR",
+          `Gemini request: tool message references toolCallId '${message.toolCallId}' but no preceding assistant toolCall has that id`,
+        );
+      }
       const part: GeminiPart = { functionResponse: { name, response: { content: message.content } } };
       if (toolContent === undefined) {
         toolContent = { role: "user", parts: [part] };

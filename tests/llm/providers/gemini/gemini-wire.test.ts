@@ -13,6 +13,16 @@ function user(content: string) {
   return { role: "user" as const, content };
 }
 
+/** An expected error: the port's LLMError, code API_ERROR, its message matching every pattern. */
+function apiError(...patterns: RegExp[]) {
+  return (error: unknown) => {
+    assert.equal((error as { name: string }).name, "LLMError");
+    assert.equal((error as { code: string }).code, "API_ERROR");
+    for (const pattern of patterns) assert.match((error as Error).message, pattern);
+    return true;
+  };
+}
+
 test("hypothesis H1: generateContent is served under v1beta", () => {
   assert.equal(
     geminiGenerateContentUrl("gemini-2.5-flash"),
@@ -108,4 +118,21 @@ test("hypothesis H2: tool results travel in a user content", () => {
       { functionResponse: { name: "navigate", response: { content: "Navigated to 'accueil'." } } },
     ],
   });
+});
+
+test("toGeminiRequest throws API_ERROR, synchronously, on a toolCallId no preceding assistant toolCall carries", () => {
+  assert.throws(
+    () => toGeminiRequest([user("go"), { role: "tool", toolCallId: "call_9", content: "x" }]),
+    apiError(/call_9/),
+  );
+  // An id that only a later assistant turn carries is still an orphan.
+  assert.throws(
+    () =>
+      toGeminiRequest([
+        user("go"),
+        { role: "tool", toolCallId: "call_0", content: "x" },
+        { role: "assistant", content: "", toolCalls: [{ id: "call_0", name: "navigate", arguments: { page: "reglages" } }] },
+      ]),
+    apiError(/call_0/),
+  );
 });
