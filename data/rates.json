@@ -1,0 +1,12 @@
+{
+  "gemini-2.5-flash": {
+    "rate": null,
+    "effectiveFrom": "2026-09-30",
+    "source": "non saisi : tarif à vérifier par Arthur sur la page de prix de l'API Gemini"
+  },
+  "qwen2.5:0.5b": {
+    "rate": { "usdPerMillionTokensIn": 0, "usdPerMillionTokensOut": 0 },
+    "effectiveFrom": "2026-09-30",
+    "source": "local"
+  }
+}

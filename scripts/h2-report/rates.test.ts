@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { loadRateFile } from "./rates.ts";
 
 // Rate file of the H2 report (#20): docs/specs/2026-09-30-h2-report-guards-design.md.
@@ -56,4 +57,17 @@ test("TEST-3 (issue 20) a zero price needs source local; a local price may be po
   assert.throws(() => loadRateFile(withEntry({ rate: { ...PRICED, usdPerMillionTokensOut: 0 } })), {
     message: `rates['m'].rate.usdPerMillionTokensOut: a zero price requires source "local"`,
   });
+});
+
+test("TEST-4 (issue 20) data/rates.json loads: dated, sourced, local model at 0, hosted model null or > 0", () => {
+  const text = readFileSync(new URL("../../data/rates.json", import.meta.url), "utf8");
+  const table = loadRateFile(text);
+  const entries: Record<string, { effectiveFrom: string; source: string }> = JSON.parse(text);
+  for (const [id, entry] of Object.entries(entries)) assert.ok(entry.effectiveFrom !== "" && entry.source.trim() !== "", id);
+  assert.equal(entries["qwen2.5:0.5b"].source, "local");
+  assert.deepEqual(table["qwen2.5:0.5b"], { usdPerMillionTokensIn: 0, usdPerMillionTokensOut: 0 });
+  assert.ok(Object.hasOwn(table, "gemini-2.5-flash"), "data/rates.json has no gemini-2.5-flash entry");
+  const hosted = table["gemini-2.5-flash"];
+  assert.ok(hosted === null || (hosted.usdPerMillionTokensIn > 0 && hosted.usdPerMillionTokensOut > 0), JSON.stringify(hosted));
+  assert.doesNotMatch(text, /AIza[0-9A-Za-z_-]{35}/);
 });
