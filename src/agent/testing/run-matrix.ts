@@ -52,8 +52,30 @@ export type MatrixRun<TState, TAxes extends Record<string, readonly unknown[]>> 
   readonly trace: MatrixTrace<TState>;
 };
 
+/**
+ * One line per (scenario, combination) pair: every dimension apart, never folded into a composite
+ * score (ADR-AGENT-0007 rule 3). The trade-off between them belongs to the reader.
+ */
+export type MatrixSummaryRow<TAxes extends Record<string, readonly unknown[]>> = {
+  readonly scenario: string;
+  /** The very object the pair's runs carry. */
+  readonly combination: Combination<TAxes>;
+  readonly runs: number;
+  readonly passed: number;
+  /** `passed / runs`. */
+  readonly successRate: number;
+  readonly meanDurationMs: number;
+  /** Sums over the pair's runs, null as soon as one run has null: absent is not zero (ADR-AGENT-0007). */
+  readonly tokensUsed: number | null;
+  readonly costUsd: number | null;
+};
+
 export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]>> = {
   readonly runs: readonly MatrixRun<TState, TAxes>[];
+  /** One line per (scenario, combination) pair, in the order the pairs ran. */
+  readonly summary: readonly MatrixSummaryRow<TAxes>[];
+  /** Fresh plain data on every call, keys in the order of the types, every null kept null (ADR-AGENT-0006). */
+  toJSON(): { runs: MatrixRun<TState, TAxes>[]; summary: MatrixSummaryRow<TAxes>[] };
 };
 
 /**
@@ -73,7 +95,18 @@ export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]
  * partial trace, and the matrix goes on. `step.ts` and `runScenario` stay untouched: responses
  * are recorded by wrapping the provider, the final state by wrapping `env`.
  *
- * Design: docs/specs/2026-09-30-run-matrix-design.md (#8).
+ * Each (scenario, combination) pair is summed up into one `summary` line as soon as its runs are
+ * done, so the lines follow the order the pairs ran, and two pairs never merge even when their
+ * names or values are equal. Success rate, mean duration, tokens and cost stay side by side, never
+ * combined into a score (ADR-AGENT-0007 rule 3).
+ *
+ * `toJSON()` copies what the report owns (arrays, runs, traces, lines, combinations) and passes on
+ * as is what the consumer or the provider gave (axis values, final states, calls, responses): a
+ * generic deep copy has no safe definition for a function or a class instance given as an axis
+ * value. An arrow closed over the arrays, so it works detached from the report too.
+ *
+ * Design: docs/specs/2026-09-30-run-matrix-design.md (#8),
+ * docs/specs/2026-09-30-matrix-report-design.md (#12).
  */
 export async function runMatrix<TState, TAxes extends Record<string, readonly unknown[]>>(
   options: MatrixOptions<TState, TAxes>,
@@ -114,15 +147,85 @@ export async function runMatrix<TState, TAxes extends Record<string, readonly un
   };
 
   const runs: MatrixRun<TState, TAxes>[] = [];
+  const summary: MatrixSummaryRow<TAxes>[] = [];
   const combinations = combinationsOf(options.axes);
   for (const scenario of options.scenarios) {
     for (const combination of combinations) {
       for (let run = 1; run <= options.runs; run++) {
         runs.push(await runOne(scenario, combination, run));
       }
+      summary.push(summarize(runs.slice(runs.length - options.runs)));
     }
   }
-  return { runs };
+  return { runs, summary, toJSON: () => ({ runs: runs.map(runData), summary: summary.map(rowData) }) };
+}
+
+/** The line of one pair, its runs in order. Never empty: `runMatrix` refuses `runs < 1` before any run. */
+function summarize<TState, TAxes extends Record<string, readonly unknown[]>>(
+  pair: readonly MatrixRun<TState, TAxes>[],
+): MatrixSummaryRow<TAxes> {
+  const passed = pair.filter((r) => r.passed).length;
+  return {
+    scenario: pair[0].scenario,
+    combination: pair[0].combination,
+    runs: pair.length,
+    passed,
+    successRate: passed / pair.length,
+    meanDurationMs: pair.reduce((sum, r) => sum + r.durationMs, 0) / pair.length,
+    tokensUsed: sumOrNull(pair.map((r) => r.tokensUsed)),
+    costUsd: sumOrNull(pair.map((r) => r.costUsd)),
+  };
+}
+
+/** A run as new plain data, keys in the order `MatrixRun` declares them, whatever order `runOne` built. */
+function runData<TState, TAxes extends Record<string, readonly unknown[]>>(
+  run: MatrixRun<TState, TAxes>,
+): MatrixRun<TState, TAxes> {
+  const { trace } = run;
+  return {
+    scenario: run.scenario,
+    combination: { ...run.combination },
+    run: run.run,
+    passed: run.passed,
+    failures: [...run.failures],
+    error: run.error,
+    durationMs: run.durationMs,
+    tokensUsed: run.tokensUsed,
+    costUsd: run.costUsd,
+    trace: {
+      toolCalls: [...trace.toolCalls],
+      finalState: trace.finalState,
+      stopReason: trace.stopReason,
+      content: trace.content,
+      responses: [...trace.responses],
+    },
+  };
+}
+
+/** A summary line as new plain data, keys in the order `MatrixSummaryRow` declares them. */
+function rowData<TAxes extends Record<string, readonly unknown[]>>(
+  row: MatrixSummaryRow<TAxes>,
+): MatrixSummaryRow<TAxes> {
+  return {
+    scenario: row.scenario,
+    combination: { ...row.combination },
+    runs: row.runs,
+    passed: row.passed,
+    successRate: row.successRate,
+    meanDurationMs: row.meanDurationMs,
+    tokensUsed: row.tokensUsed,
+    costUsd: row.costUsd,
+  };
+}
+
+/** Null as soon as one value is null: a partial sum would read as an exact total, understated. */
+function sumOrNull(values: readonly (number | null)[]): number | null {
+  let sum = 0;
+  for (const value of values) {
+    if (value === null) return null;
+    sum += value;
+  }
+  return sum;
 }
 
 function combinationsOf<TAxes extends Record<string, readonly unknown[]>>(

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { defineAgent } from "../../../dist/agent/index.js";
 import type { AgentDeps } from "../../../dist/agent/index.js";
 import { defineScenario, fakeApp } from "../../../dist/agent/testing/index.js";
-import type { FakeApp, FakeAppState } from "../../../dist/agent/testing/index.js";
+import type { FakeApp, FakeAppState, MatrixSummaryRow } from "../../../dist/agent/testing/index.js";
 import { runMatrix } from "../../../dist/agent/testing/run-matrix.js";
 import type { MatrixOptions } from "../../../dist/agent/testing/run-matrix.js";
 import { HeuristicTokenCounter, SlidingWindowStrategy } from "../../../dist/context/index.js";
@@ -212,4 +212,94 @@ test("a deps or an env that throws becomes that run's error, with what was recor
   const broken = [scenario("aller aux reglages", "reglages", () => { throw new Error("env broke"); })];
   const [run] = (await matrix({ scenarios: broken, deps: () => wiring(provider) })).runs;
   assert.deepEqual([run.error, run.trace.finalState, run.trace.responses, provider.calls.length], ["env broke", null, [], 0]);
+});
+
+test("runMatrix sums each (scenario, combination) pair into one summary line, in the order the pairs ran", async () => {
+  const scripts = [
+    [navigate(USAGE), text("tu y es", USAGE)],
+    [text("non", USAGE)],
+    [navigate(USAGE), text("tu y es", USAGE)],
+    [navigate(), text("tu y es")],
+  ];
+  let built = 0;
+  let t = 0;
+  const report = await runMatrix({
+    scenarios: [scenario("aller aux reglages", "reglages")],
+    axes: { model: ["a", "b"] },
+    runs: 2,
+    deps: () => wiring(new FakeLLMProvider({ responses: scripts[built++] })),
+    rates: { "fake-model": RATE },
+    now: () => (t += 10),
+  });
+
+  const summary: readonly MatrixSummaryRow<{ model: string[] }>[] = report.summary;
+  assert.deepEqual(summary, [
+    {
+      scenario: "aller aux reglages", combination: { model: "a" }, runs: 2, passed: 1,
+      successRate: 0.5, meanDurationMs: 40, tokensUsed: 2_250_000, costUsd: 9,
+    },
+    {
+      scenario: "aller aux reglages", combination: { model: "b" }, runs: 2, passed: 2,
+      successRate: 1, meanDurationMs: 50, tokensUsed: null, costUsd: null,
+    },
+  ]);
+  assert.equal(summary[0].combination, report.runs[0].combination);
+  assert.equal(summary[1].combination, report.runs[2].combination);
+
+  const two = [scenario("aller aux reglages", "reglages"), scenario("aller au profil", "profil")];
+  const { summary: lines } = await matrix({ scenarios: two });
+  const rows = lines.map((r) => [r.scenario, r.runs, r.passed, r.successRate]);
+  assert.deepEqual(rows, [["aller aux reglages", 1, 1, 1], ["aller au profil", 1, 0, 0]]);
+});
+
+test("report.toJSON() hands back fresh plain data, keys in the order of the types, null kept null", async () => {
+  let t = 0;
+  const report = await matrix({
+    axes: { model: ["a", "b"] },
+    deps: ({ model }) => {
+      const landing: LLMResponse = { content: "tu y es", toolCalls: [] };
+      const responses = model === "a" ? [navigate(USAGE), text("tu y es", USAGE)] : [landing];
+      return wiring(new FakeLLMProvider({ responses }));
+    },
+    rates: { "fake-model": RATE },
+    now: () => (t += 10),
+  });
+
+  const json = report.toJSON();
+  assert.deepEqual(Object.keys(json), ["runs", "summary"]);
+  assert.notEqual(json.runs, report.runs);
+  assert.notEqual(json.summary, report.summary);
+  assert.notEqual(json.runs[0], report.runs[0]);
+  assert.notEqual(json.summary[0], report.summary[0]);
+  assert.notEqual(report.toJSON().runs, json.runs);
+  assert.deepEqual(json.runs, report.runs);
+  assert.deepEqual(json.summary, report.summary);
+  const runKeys = ["scenario", "combination", "run", "passed", "failures", "error", "durationMs", "tokensUsed", "costUsd", "trace"];
+  assert.deepEqual(Object.keys(json.runs[0]), runKeys);
+  assert.deepEqual(Object.keys(json.runs[0].trace), ["toolCalls", "finalState", "stopReason", "content", "responses"]);
+  const rowKeys = ["scenario", "combination", "runs", "passed", "successRate", "meanDurationMs", "tokensUsed", "costUsd"];
+  assert.deepEqual(Object.keys(json.summary[0]), rowKeys);
+
+  const parsed = JSON.parse(JSON.stringify(report));
+  assert.deepEqual(parsed, json);
+  assert.deepEqual([parsed.runs[0].costUsd, parsed.summary[0].costUsd], [6, 6]);
+  assert.deepEqual([parsed.runs[1].costUsd, parsed.runs[1].tokensUsed], [null, null]);
+  assert.deepEqual([parsed.summary[1].costUsd, parsed.summary[1].tokensUsed], [null, null]);
+});
+
+test("a finalState predicate that throws fails its run with the error, and the matrix goes on", async () => {
+  const [r1, r2] = [navigate(), text("tu y es")];
+  const expect = { finalState: (): boolean => { throw new Error("predicate broke"); } };
+  const throwing = defineScenario({ name: "predicat qui leve", env: app, input: "amene-moi a la page reglages", expect });
+  const report = await matrix({ scenarios: [throwing, scenario("aller aux reglages", "reglages")], deps: script(r1, r2) });
+
+  const [thrown, next] = report.runs;
+  assert.deepEqual([thrown.passed, thrown.failures, thrown.error], [false, [], "predicate broke"]);
+  assert.equal(thrown.trace.finalState?.current, "reglages");
+  assert.equal(thrown.trace.responses.length, 2);
+  [r1, r2].forEach((response, i) => assert.equal(thrown.trace.responses[i], response));
+  assert.deepEqual(thrown.trace.toolCalls, r1.toolCalls);
+  assert.deepEqual([thrown.trace.stopReason, thrown.trace.content], [null, null]);
+  assert.deepEqual([next.passed, next.error], [true, null]);
+  assert.deepEqual(report.summary.map((r) => [r.passed, r.successRate]), [[0, 0], [1, 1]]);
 });
