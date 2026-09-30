@@ -206,3 +206,19 @@ test("fromGeminiResponse throws API_ERROR on a body without candidate or without
   assert.equal(empty.content, "");
   assert.deepStrictEqual(empty.toolCalls, []);
 });
+
+test("hypothesis H4: thoughtsTokenCount counts as output", () => {
+  const answer = { candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] };
+  const usageOf = (usageMetadata: Record<string, number>) => fromGeminiResponse({ ...answer, usageMetadata }).usage;
+
+  assert.deepStrictEqual(usageOf({ promptTokenCount: 10, candidatesTokenCount: 5, thoughtsTokenCount: 7 }), {
+    tokensIn: 10,
+    tokensOut: 12,
+  });
+  assert.deepStrictEqual(usageOf({ promptTokenCount: 10, candidatesTokenCount: 5 }), { tokensIn: 10, tokensOut: 5 });
+  assert.deepStrictEqual(usageOf({ promptTokenCount: 0, candidatesTokenCount: 0 }), { tokensIn: 0, tokensOut: 0 });
+  // Absent is not zero (ADR-AGENT-0007): a missing counter leaves usage undefined.
+  assert.equal(usageOf({ promptTokenCount: 10 }), undefined);
+  assert.equal(usageOf({ candidatesTokenCount: 5, thoughtsTokenCount: 7 }), undefined);
+  assert.equal(fromGeminiResponse(answer).usage, undefined);
+});

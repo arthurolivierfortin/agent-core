@@ -17,7 +17,7 @@
 //   Locked by "hypothesis H4: thoughtsTokenCount counts as output".
 
 import { LLMError } from "../../models/index.js";
-import type { LLMResponse, Message, ToolCall, ToolDefinition } from "../../models/index.js";
+import type { LLMResponse, Message, ToolCall, ToolDefinition, Usage } from "../../models/index.js";
 
 export type GeminiFunctionCall = { id?: string; name: string; args?: Record<string, unknown> };
 export type GeminiFunctionResponse = { name: string; response: { content: string } };
@@ -154,7 +154,7 @@ export function fromGeminiResponse(body: GeminiResponse): LLMResponse {
     // i is the rank among functionCall parts, so call_0 is the first call whatever text precedes it.
     toolCalls.push({ id: call.id ?? `call_${toolCalls.length}`, name: call.name, arguments: call.args ?? {} });
   }
-  return { content, toolCalls };
+  return { content, toolCalls, usage: toUsage(body.usageMetadata) };
 }
 
 /**
@@ -174,4 +174,15 @@ function firstCandidateParts(body: GeminiResponse): GeminiPart[] {
     throw new LLMError("API_ERROR", `Gemini candidate has no content (finishReason: ${finishReason})`);
   }
   return parts;
+}
+
+/**
+ * Tokens of a call, thinking counted as output (H4). Both counters must be numbers, else usage
+ * stays undefined: absent is not zero (ADR-AGENT-0007).
+ */
+function toUsage(metadata: GeminiResponse["usageMetadata"]): Usage | undefined {
+  const tokensIn = metadata?.promptTokenCount;
+  const candidateTokens = metadata?.candidatesTokenCount;
+  if (typeof tokensIn !== "number" || typeof candidateTokens !== "number") return undefined;
+  return { tokensIn, tokensOut: candidateTokens + (metadata?.thoughtsTokenCount ?? 0) };
 }
