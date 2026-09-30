@@ -1,8 +1,8 @@
-# Roadmap: nathan-agent-core
+# Roadmap: agent-core
 
 Four versions. Since the layers are provider-agnostic, **choosing the provider is a late decision**: you start on what is free and local, then move up in quality afterward.
 
-The reasoning behind each choice is in `docs/decisions/`. The V1 PR breakdown is in `docs/plans/2026-07-21-v1-decoupage-pr.md`.
+The reasoning behind each choice is in `docs/decisions/`.
 
 ---
 
@@ -37,7 +37,7 @@ It is the criterion that ruled out the generic permissions framework (`ADR-AGENT
 
 ### Breakdown into six PRs
 
-Each PR depends only on the previous ones, and **each PR verifies itself**. Full detail, pitfalls included: `docs/plans/2026-07-21-v1-decoupage-pr.md`.
+Each PR depends only on the previous ones, and **each PR verifies itself**.
 
 | PR | Contents | Completion criterion |
 |---|---|---|

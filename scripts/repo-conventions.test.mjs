@@ -136,3 +136,19 @@ test("TEST-9 ROADMAP : renvois aux issues #2 et #3", () => {
   assert.ok(v2 !== -1 && v3 !== -1, "ROADMAP sans titre V2 ou V3");
   assert.ok(v2 < tracked && tracked < v3, "renvoi à #3 hors de la section V2");
 });
+
+test("TEST-10 ROADMAP : titre agent-core, sans renvoi au plan d'origine", () => {
+  const roadmap = readRepoFile("ROADMAP.md");
+  const lines = splitLines(roadmap);
+  assert.equal(lines[0], "# Roadmap: agent-core", "ROADMAP : premier titre");
+  assert.ok(!roadmap.includes("nathan-agent-core"), "ROADMAP contient encore nathan-agent-core");
+  assert.ok(!roadmap.includes("v1-decoupage-pr"), "ROADMAP contient encore v1-decoupage-pr");
+  for (const heading of [
+    "## V1: The engine, on Ollama",
+    "## V2: Second provider + evaluation on a real model",
+    "## V3: Self-feeding memory",
+    "## V4: Voice",
+  ]) {
+    assert.ok(lines.includes(heading), `ROADMAP sans le titre ${heading}`);
+  }
+});
