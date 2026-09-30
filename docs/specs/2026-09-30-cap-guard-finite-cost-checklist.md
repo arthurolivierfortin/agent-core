@@ -21,8 +21,18 @@ Spécification : docs/specs/2026-09-30-cap-guard-finite-cost-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **R-1** (spécification) · Compteurs invalides qui se compensent : le contrôle porte sur le coût, pas sur les compteurs ; un compteur négatif compensé par un compteur positif (par exemple `tokensIn` −1 et `tokensOut` 1 000 000) donne un coût fini et positif, sous-estimé, qui s'ajoute sans coupure. `toUsage` ne l'empêche pas davantage (alignement sur `typeof` seul, D4). Aucune réponse Gemini connue ne porte un compteur négatif. Hors périmètre du pilote ; à rouvrir en issue si le pilote veut une étanchéité par compteur.
+- [H] **R-2** (spécification) · Paire coupure/plafond inatteignable : le point 3 du pilote demande chaque paire discriminée ; celle-ci ne peut pas l'être sans exposer l'état interne (écarté, D7 : les sept clés de `CapGuard` restent inchangées, aucun accès à `spent` ni fonction de contrôle exportée). TEST-5 verrouille les deux paires atteignables, qui fixent l'ordre total observable (le tarif en dernier) ; son commentaire le dit.
+- [H] **R-3** (spécification) · Réponse qui lève à la lecture de `usage` : `response.usage?.tokensIn` est lu hors du `try` ; un fournisseur qui résout `undefined`, ou un `usage` dont un accesseur lève, fait rejeter l'appel sans poser de coupure, et l'appel suivant est admis. `GeminiLLMProvider` rend toujours un objet construit par `fromGeminiResponse` : le cas ne vient que d'un adaptateur non conforme au port. Signalé au pilote pour une éventuelle issue, non traité ici.
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1 (spécification ; précédent P1 de #20 et #35).
+- [H] **P2** · Découpage et noms des tests choisis par le plan : TEST-1 en cinq `test()` (trois lignes de la table `INVALID_USAGES`, la sonde, la borne du coût nul), TEST-2, TEST-3 et TEST-5 en un chacun, TEST-4 en deux (table `INFINITE_RATES`) : dix tests ajoutés (324 → 334). Titres en anglais comme leurs voisins, préfixés `TEST-N (issue 39)`, y compris TEST-2 dans un fichier dont les titres n'ont pas de préfixe ; aucun `#` dans un titre (TAP l'échappe en `\#`). Aide de test `settle` (issue d'un appel : `"resolved"` ou le message du rejet), définie une fois dans `cap-guard.test.ts` et réutilisée par TEST-1, TEST-4 et TEST-5. Le test du coût nul est vert avant SPEC-1 : c'est une borne (`cost < 0` contre `cost <= 0`), pas un rouge.
+- [H] **P3** · Mutation 5b : le contrôle du tarif placé tout en haut passe aussi avant le plafond ; le cas « plafond avant tarif » échoue donc avec le cas « coupure avant tarif ». La checklist dit que cette mutation fait échouer « le second cas » : c'est observé (ligne `cutFirst` de la sortie), et le `deepEqual` unique de TEST-5 est choisi pour que ce second cas reste visible au lieu d'être masqué par l'échec du premier. Aucune mutation de la forme prescrite (« déplacé seul au-dessus de la coupure ») ne peut casser le second cas sans le premier.
+- [H] **P4** · Mutations annulées par `git restore scripts/h2-report/cap-guard.ts` (le fichier est commité depuis la tâche 1 et la mutation est sa seule modification non commitée), preuve par `git diff --stat -- scripts/h2-report/cap-guard.ts` vide avant chaque commit.
+- [H] **P5** · Textes choisis par le plan : commentaire `#39` de SPEC-1 (« a NaN, infinite or negative cost is unknown too; added up, it would blind the cap ») ; TSDoc de `capGuard` et de `toUsage` réécrits au plus près de la spécification (éditions 1.3a et 2.3).
+- [H] **P6** · Longueurs : treize lignes ajoutées à `cap-guard.test.ts` dépassent 100 colonnes (au plus 120, mesuré) ; le dépôt n'a ni formateur ni linter, et le fichier en a déjà autant (l.19 : 120 ; l.161 : 121). Aucune ligne ajoutée hors de ce fichier ne dépasse 100 colonnes.
+- [H] **Node** · Node local ≥ 22.18 (retrait de types sans drapeau), constaté v22.19.0.
