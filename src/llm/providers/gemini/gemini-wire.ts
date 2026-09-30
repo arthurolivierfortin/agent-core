@@ -177,12 +177,15 @@ function firstCandidateParts(body: GeminiResponse): GeminiPart[] {
 }
 
 /**
- * Tokens of a call, thinking counted as output (H4). Both counters must be numbers, else usage
- * stays undefined: absent is not zero (ADR-AGENT-0007).
+ * Tokens of a call, thinking counted as output (H4). The three counters must be numbers, else usage
+ * stays undefined (#39); thoughtsTokenCount alone may be missing, and then counts 0. For the other
+ * two, absent is not zero (ADR-AGENT-0007).
  */
 function toUsage(metadata: GeminiResponse["usageMetadata"]): Usage | undefined {
   const tokensIn = metadata?.promptTokenCount;
   const candidateTokens = metadata?.candidatesTokenCount;
+  const thoughts = metadata?.thoughtsTokenCount;
   if (typeof tokensIn !== "number" || typeof candidateTokens !== "number") return undefined;
-  return { tokensIn, tokensOut: candidateTokens + (metadata?.thoughtsTokenCount ?? 0) };
+  if (thoughts !== undefined && typeof thoughts !== "number") return undefined;
+  return { tokensIn, tokensOut: candidateTokens + (thoughts ?? 0) };
 }

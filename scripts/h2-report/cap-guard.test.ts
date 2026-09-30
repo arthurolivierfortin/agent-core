@@ -196,3 +196,104 @@ test("TEST-7 (issue 35) a resolved call without usage is returned, then cuts the
   assert.equal(double.count(), 2);
   assert.equal(guard.refused(), 1);
 });
+
+// Issue 39 (docs/specs/2026-09-30-cap-guard-finite-cost-design.md): a cost that is not finite, or
+// negative, is unknown like a null one; it cuts the matrix and never enters spentUsd.
+const INVALID_USAGES: ReadonlyArray<readonly [string, LLMResponse["usage"]]> = [
+  ["a NaN cost", { tokensIn: 1, tokensOut: NaN }],
+  ["an infinite cost", { tokensIn: Infinity, tokensOut: 0 }],
+  ["a negative cost", { tokensIn: 0, tokensOut: -1_000_000 }],
+];
+
+for (const [title, usage] of INVALID_USAGES) {
+  test(`TEST-1 (issue 39) ${title} is returned, then cuts the matrix (unclassified) outside spentUsd`, async () => {
+    const response: LLMResponse = { content: title, toolCalls: [], usage };
+    const double = scripted([PRICED, { response }]);
+    const guard = capGuard(double.provider, RATES, 10);
+    await guard.complete(HI, OPTS);
+    assert.equal(await guard.complete(HI, OPTS), response);
+    assert.deepEqual([guard.cutReason(), guard.spentUsd(), guard.refused()], ["unclassified", 0.5, 0]);
+    await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unclassified") });
+    assert.equal(double.count(), 2);
+    assert.equal(guard.refused(), 1);
+  });
+}
+
+/** How a call settles: "resolved", or the message it is rejected with. */
+const settle = (call: Promise<LLMResponse>): Promise<string> =>
+  call.then(() => "resolved", (error: Error) => error.message);
+
+test("TEST-1 (issue 39) the review probe of PR 38: a NaN cost at a cap of 0.000001 lets one call through", async () => {
+  const response: LLMResponse = { content: "nan", toolCalls: [], usage: { tokensIn: 1, tokensOut: NaN } };
+  const double = scripted([{ response }]);
+  const guard = capGuard(double.provider, RATES, 0.000001);
+  assert.equal(await guard.complete(HI, OPTS), response);
+  const next = [await settle(guard.complete(HI, OPTS)), await settle(guard.complete(HI, OPTS))];
+  assert.deepEqual([double.count(), guard.spentUsd(), guard.cutReason(), guard.refused()], [1, 0, "unclassified", 2]);
+  assert.deepEqual(next, [cutMessage(MODEL, "unclassified"), cutMessage(MODEL, "unclassified")]);
+});
+
+test("TEST-1 (issue 39) a cost of 0 is known: added to spentUsd, without a cut", async () => {
+  const zero: LLMResponse = { content: "zero", toolCalls: [], usage: { tokensIn: 0, tokensOut: 0 } };
+  const double = scripted([PRICED, { response: zero }, PRICED]);
+  const guard = capGuard(double.provider, RATES, 10);
+  await guard.complete(HI, OPTS);
+  assert.equal(await guard.complete(HI, OPTS), zero);
+  assert.deepEqual([guard.cutReason(), guard.spentUsd()], [null, 0.5]);
+  assert.equal(await guard.complete(HI, OPTS), PRICED_RESPONSE);
+  assert.deepEqual([double.count(), guard.spentUsd(), guard.refused()], [3, 1, 0]);
+});
+
+test("TEST-3 (issue 39) a status of 600, above the HTTP range, cuts the matrix as unclassified", async () => {
+  const error = new LLMError("API_ERROR", "above range", { status: 600 });
+  const double = scripted([PRICED, { error }]);
+  const guard = capGuard(double.provider, RATES, 10);
+  await guard.complete(HI, OPTS);
+  await assert.rejects(guard.complete(HI, OPTS), (thrown) => thrown === error);
+  assert.deepEqual([guard.cutReason(), guard.spentUsd(), guard.refused()], ["unclassified", 0.5, 0]);
+  await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unclassified") });
+  assert.equal(double.count(), 2);
+  assert.equal(guard.refused(), 1);
+});
+
+const INFINITE_RATES: ReadonlyArray<readonly [string, RateTable]> = [
+  ["an input price of Infinity", { [MODEL]: { ...HOSTED_RATE, usdPerMillionTokensIn: Infinity } }],
+  ["an output price of Infinity", { [MODEL]: { ...HOSTED_RATE, usdPerMillionTokensOut: Infinity } }],
+];
+
+for (const [title, rates] of INFINITE_RATES) {
+  test(`TEST-4 (issue 39) ${title} cuts the matrix before the provider is called (unpriced_model)`, async () => {
+    const double = scripted([PRICED]);
+    const guard = capGuard(double.provider, rates, 10);
+    const outcome = await settle(guard.complete(HI, OPTS));
+    assert.deepEqual(
+      [outcome, double.count(), guard.cutReason(), guard.refused(), guard.spentUsd()],
+      [cutMessage(MODEL, "unpriced_model"), 0, "unpriced_model", 1, 0],
+    );
+  });
+}
+
+// The cut/cap pair has no reachable state where both hold, so no test can order it (SPEC-5, R-2 of
+// docs/specs/2026-09-30-cap-guard-finite-cost-design.md); the two pairs below put the rate last.
+test("TEST-5 (issue 39) the checks run in the order cut, cap, rate", async () => {
+  const UNPRICED = { model: "unpriced-model" };
+  // The cap before the rate: 0.5 USD spent at a cap of 0.5, then a model absent from RATES.
+  const capped = scripted([PRICED]);
+  const atCap = capGuard(capped.provider, RATES, 0.5);
+  await atCap.complete(HI, OPTS);
+  const capFirst = [await settle(atCap.complete(HI, UNPRICED)), atCap.cutReason(), atCap.refused(), capped.count()];
+  // The cut before the rate: cut by a status 429, then a model absent from RATES.
+  const error = new LLMError("API_ERROR", "quota", { status: 429 });
+  const limited = scripted([PRICED, { error }]);
+  const cut = capGuard(limited.provider, RATES, 10);
+  await cut.complete(HI, OPTS);
+  await assert.rejects(cut.complete(HI, OPTS), (thrown) => thrown === error);
+  const cutFirst = [await settle(cut.complete(HI, UNPRICED)), cut.cutReason(), cut.refused(), limited.count()];
+  assert.deepEqual(
+    { capFirst, cutFirst },
+    {
+      capFirst: ["capGuard refused a call to 'unpriced-model': 0.5 USD spent reached the cap of 0.5 USD", null, 1, 1],
+      cutFirst: [cutMessage("unpriced-model", "rate_limited"), "rate_limited", 1, 2],
+    },
+  );
+});

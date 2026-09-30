@@ -222,3 +222,14 @@ test("hypothesis H4: thoughtsTokenCount counts as output", () => {
   assert.equal(usageOf({ candidatesTokenCount: 5, thoughtsTokenCount: 7 }), undefined);
   assert.equal(fromGeminiResponse(answer).usage, undefined);
 });
+
+test("TEST-2 (issue 39) a thoughtsTokenCount that is not a number leaves usage undefined", () => {
+  const answer = { candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] };
+  const usages = ["7", null, true].map((thoughts) => {
+    const thoughtsTokenCount = thoughts as unknown as number;
+    const usageMetadata = { promptTokenCount: 10, candidatesTokenCount: 5, thoughtsTokenCount };
+    return fromGeminiResponse({ ...answer, usageMetadata }).usage;
+  });
+  // Before #39: tokensOut "57" (a string), then 5 (null counted 0), then 6 (true counted 1).
+  assert.deepStrictEqual(usages, [undefined, undefined, undefined]);
+});
