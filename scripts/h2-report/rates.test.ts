@@ -48,3 +48,12 @@ for (const [label, text, message] of DEFECTS) {
     assert.throws(() => loadRateFile(text), { message });
   });
 }
+
+test("TEST-3 (issue 20) a zero price needs source local; a local price may be positive", () => {
+  const zero = { usdPerMillionTokensIn: 0, usdPerMillionTokensOut: 0 };
+  assert.deepEqual(loadRateFile(withEntry({ rate: zero, source: "local" })), { m: zero });
+  assert.deepEqual(loadRateFile(withEntry({ rate: PRICED, source: "local" })), { m: PRICED });
+  assert.throws(() => loadRateFile(withEntry({ rate: { ...PRICED, usdPerMillionTokensOut: 0 } })), {
+    message: `rates['m'].rate.usdPerMillionTokensOut: a zero price requires source "local"`,
+  });
+});

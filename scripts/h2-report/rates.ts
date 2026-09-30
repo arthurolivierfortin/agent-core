@@ -4,6 +4,8 @@ import type { Rate, RateTable } from "../../dist/index.js";
 
 const ENTRY_FIELDS = ["rate", "effectiveFrom", "source"];
 const PRICE_FIELDS = ["usdPerMillionTokensIn", "usdPerMillionTokensOut"];
+// The only source under which a price may be 0 (rule R1); start-guard.ts refuses a hosted price of 0 (R2).
+const LOCAL_SOURCE = "local";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -24,19 +26,20 @@ function isRealDate(value: unknown): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function readPrice(value: unknown, where: string): number {
+function readPrice(value: unknown, where: string, source: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new Error(`${where}: must be a finite number >= 0`);
   }
+  if (value === 0 && source !== LOCAL_SOURCE) throw new Error(`${where}: a zero price requires source "${LOCAL_SOURCE}"`);
   return value;
 }
 
-function readRate(value: unknown, where: string): Rate | null {
+function readRate(value: unknown, where: string, source: string): Rate | null {
   if (value === null) return null;
   if (!isObject(value)) throw new Error(`${where}: must be null or an object`);
   checkFields(value, PRICE_FIELDS, where);
   const [usdPerMillionTokensIn, usdPerMillionTokensOut] = PRICE_FIELDS.map((field) =>
-    readPrice(value[field], `${where}.${field}`),
+    readPrice(value[field], `${where}.${field}`, source),
   );
   return { usdPerMillionTokensIn, usdPerMillionTokensOut };
 }
@@ -50,7 +53,7 @@ function readEntry(id: string, entry: unknown): Rate | null {
   if (typeof entry.source !== "string" || entry.source.trim() === "") {
     throw new Error(`${where}.source: must be a non-empty string`);
   }
-  return readRate(entry.rate, `${where}.rate`);
+  return readRate(entry.rate, `${where}.rate`, entry.source);
 }
 
 /**
