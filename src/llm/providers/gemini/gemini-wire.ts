@@ -17,7 +17,7 @@
 //   Locked by "hypothesis H4: thoughtsTokenCount counts as output".
 
 import { LLMError } from "../../models/index.js";
-import type { Message, ToolCall, ToolDefinition } from "../../models/index.js";
+import type { LLMResponse, Message, ToolCall, ToolDefinition } from "../../models/index.js";
 
 export type GeminiFunctionCall = { id?: string; name: string; args?: Record<string, unknown> };
 export type GeminiFunctionResponse = { name: string; response: { content: string } };
@@ -136,4 +136,23 @@ function toFunctionDeclaration(tool: ToolDefinition): GeminiFunctionDeclaration 
   const declaration: GeminiFunctionDeclaration = { name: tool.name, description: tool.description };
   if (Object.keys(tool.parameters.properties).length > 0) declaration.parameters = tool.parameters;
   return declaration;
+}
+
+/**
+ * Read a generateContent body. Synchronous and pure. Only the first candidate counts: its text
+ * parts joined with nothing between them, since Gemini may split one text across several parts,
+ * and one toolCall per functionCall part, in order.
+ */
+export function fromGeminiResponse(body: GeminiResponse): LLMResponse {
+  const parts = body.candidates?.[0]?.content?.parts ?? [];
+  let content = "";
+  const toolCalls: ToolCall[] = [];
+  for (const part of parts) {
+    if (typeof part.text === "string") content += part.text;
+    if (part.functionCall === undefined) continue;
+    const call = part.functionCall;
+    // i is the rank among functionCall parts, so call_0 is the first call whatever text precedes it.
+    toolCalls.push({ id: call.id ?? `call_${toolCalls.length}`, name: call.name, arguments: call.args ?? {} });
+  }
+  return { content, toolCalls };
 }

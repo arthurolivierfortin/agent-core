@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   GEMINI_DEFAULT_BASE_URL,
+  fromGeminiResponse,
   geminiGenerateContentUrl,
   toGeminiRequest,
 } from "../../../../dist/llm/providers/gemini/gemini-wire.js";
@@ -155,4 +156,34 @@ test("toGeminiRequest declares tools as functionDeclarations, parameters omitted
   assert.equal("parameters" in tools![0].functionDeclarations[1], false);
   assert.equal("tools" in toGeminiRequest([user("go")]), false);
   assert.equal("tools" in toGeminiRequest([user("go")], []), false);
+});
+
+test("hypothesis H3: functionCall ids are optional", () => {
+  const response = fromGeminiResponse({
+    candidates: [
+      {
+        content: {
+          role: "model",
+          parts: [
+            { text: "Je " },
+            { text: "navigue." },
+            { functionCall: { name: "navigate", args: { page: "reglages" } } },
+            { functionCall: { id: "fc-abc", name: "getCurrentPage" } },
+            { functionCall: { name: "navigate", args: { page: "accueil" } } },
+          ],
+        },
+      },
+      { content: { role: "model", parts: [{ text: "ignoré" }] } },
+    ],
+  });
+
+  assert.equal(response.content, "Je navigue.");
+  // call_<i> counts functionCall parts only, not the text parts before them.
+  assert.deepStrictEqual(response.toolCalls, [
+    { id: "call_0", name: "navigate", arguments: { page: "reglages" } },
+    { id: "fc-abc", name: "getCurrentPage", arguments: {} },
+    { id: "call_2", name: "navigate", arguments: { page: "accueil" } },
+  ]);
+  const textOnly = fromGeminiResponse({ candidates: [{ content: { role: "model", parts: [{ text: "Bonjour" }] } }] });
+  assert.deepStrictEqual(textOnly.toolCalls, []);
 });
