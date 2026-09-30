@@ -3,3 +3,4 @@
 export * from "./fake-app.js";
 export * from "./define-scenario.js";
 export * from "./run-scenario.js";
+export * from "./run-matrix.js";
