@@ -13,6 +13,25 @@ function splitLines(text) {
   return text.split(/\r?\n/);
 }
 
+function checkEnvExample(relativePath, expectedNamed) {
+  const envLines = splitLines(readRepoFile(relativePath));
+  assert.deepEqual(
+    envLines.filter((line) => line !== "" && !line.startsWith("#")),
+    [],
+    `${relativePath} : ligne ni vide ni commentée`,
+  );
+  assert.deepEqual(
+    envLines.filter((line) => line.includes("=")),
+    expectedNamed,
+    `${relativePath} : lignes avec = inattendues`,
+  );
+  assert.deepEqual(
+    envLines.filter((line) => line.includes("localhost") || line.includes("qwen")),
+    [],
+    `${relativePath} : valeur par défaut recopiée`,
+  );
+}
+
 test("TEST-1 .gitignore versionne docs/specs et docs/plans", () => {
   const gitignore = splitLines(readRepoFile(".gitignore"));
   assert.ok(!gitignore.includes("/docs/specs"), ".gitignore ignore encore /docs/specs");
@@ -25,4 +44,8 @@ test("TEST-1 .gitignore versionne docs/specs et docs/plans", () => {
   for (const kept of [".env", ".env.*", "!.env.example", "node_modules/", "dist/"]) {
     assert.ok(gitignore.includes(kept), `.gitignore a perdu la ligne ${kept}`);
   }
+});
+
+test("TEST-2 .env.example nomme les variables sans valeur", () => {
+  checkEnvExample(".env.example", ["# LLM_PROVIDER=", "# OLLAMA_HOST=", "# OLLAMA_MODEL="]);
 });
