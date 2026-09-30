@@ -116,3 +116,12 @@ test("TEST-6 ROADMAP : Marcel est le consommateur de référence", () => {
     assert.ok(!roadmap.includes(gone), `ROADMAP contient encore ${gone}`);
   }
 });
+
+test("TEST-8 ROADMAP : plus aucune mention de l'IDE", () => {
+  const roadmap = readRepoFile("ROADMAP.md");
+  assert.ok(!/\bIDE\b/.test(roadmap), "ROADMAP contient encore le mot IDE");
+  assert.ok(!roadmap.includes("blind"), "ROADMAP contient encore blind");
+  for (const expected of ["when Marcel needs it", "in the consumer (Marcel), never in the package", "after Marcel's integration surfaces"]) {
+    assert.ok(roadmap.includes(expected), `ROADMAP sans ${expected}`);
+  }
+});

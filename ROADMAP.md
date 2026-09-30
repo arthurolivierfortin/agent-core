@@ -54,7 +54,7 @@ Three ordering points that are not arbitrary:
 - **The fake provider is in PR2, not in the harness.** Without it, PR4 would test *the model* instead of *our loop*. It also serves as interface verification: if the fake is painful to write, the port is bad, and we learn it right away.
 - **`LLMResponse.usage` is populated as of PR2.** The cost will be `null` everywhere in V1 on Ollama, but retrofitting the plumbing into every adapter later is expensive.
 
-**Then**: integration into the IDE repo, and back here when a wall appears.
+**Then**: integration into Marcel (#4), and back here when a wall appears.
 
 ---
 
@@ -86,8 +86,6 @@ A `MemoryStrategy` that feeds itself, in the spirit of a `CLAUDE.md`, but per us
 **Plugs in without breaking anything**: `context/strategies/memory/` drops in next to `sliding-window/`, behind the same `ContextStrategy`. The engine does not move.
 
 This is the port's reason for being: sliding window and memory are **two strategies behind one contract**. Hence `observe()` present as of V1, even if `SlidingWindowStrategy.observe()` is a literal no-op there. The contract those strategies must respect is frozen by `ADR-AGENT-0016`.
-
-Accessibility stake: for a blind person dictating their code, an agent that remembers their habits avoids re-explaining everything at each session.
 
 ### The strategies intended here
 
@@ -207,11 +205,11 @@ Versioning and evaluation are the same feature seen from two angles: versioning 
 |---|---|
 | Policy layer (permissions) | a consumer exposes a broad capability, shell-like |
 | Container execution | same, and it is the **only** true security boundary |
-| User approval before writing | when the IDE repo needs it; `step()` makes it cheap |
+| User approval before writing | when Marcel needs it; `step()` makes it cheap |
 | Real tokenizer per model family | when calibration shows drift beyond margin |
 | Tool rendering in prompt (models without native calls) | when a targeted model is declared with `supportsTools: false` |
-| Web interface for reports | in the IDE repo, never in the package |
-| Reusable, restylable UI component for the agent loop (a `./ui` entry point) | after IDE integration surfaces the real shape needed. Until then, a plain demo app in `examples/` covers both showing the package working and iterating on it locally, with no new public surface. See `ADR-AGENT-0018` |
+| Web interface for reports | in the consumer (Marcel), never in the package |
+| Reusable, restylable UI component for the agent loop (a `./ui` entry point) | after Marcel's integration surfaces the real shape needed. Until then, a plain demo app in `examples/` covers both showing the package working and iterating on it locally, with no new public surface. See `ADR-AGENT-0018` |
 | CI replaying the test and typecheck gates on a PR | when the Actions minutes are worth paying for. Deliberately absent, not an oversight: the gates run locally and in the review cycle, and `publish.yml` was trimmed to build and publish for the same reason. Until then the suite is advisory, whoever pushes is what enforces it |
 | Declared-model verification against the server (`ADR-AGENT-0017`) | when a deployment actually runs a local server. The showcase prototype calls hosted providers, where a declared model cannot be missing from a local install, so the gap does not arise. Until then the first call reports it, with the `ollama pull` command to run |
 | Declarative vocabulary for tool-call sequences (order between named tools, a pipeline triggered freely then followed in order, periodicity across a run) | a second real scenario, in this package or a consumer, needs to check more than presence, final state, or `stopReason` |
