@@ -144,7 +144,7 @@ function toFunctionDeclaration(tool: ToolDefinition): GeminiFunctionDeclaration 
  * and one toolCall per functionCall part, in order.
  */
 export function fromGeminiResponse(body: GeminiResponse): LLMResponse {
-  const parts = body.candidates?.[0]?.content?.parts ?? [];
+  const parts = firstCandidateParts(body);
   let content = "";
   const toolCalls: ToolCall[] = [];
   for (const part of parts) {
@@ -155,4 +155,23 @@ export function fromGeminiResponse(body: GeminiResponse): LLMResponse {
     toolCalls.push({ id: call.id ?? `call_${toolCalls.length}`, name: call.name, arguments: call.args ?? {} });
   }
   return { content, toolCalls };
+}
+
+/**
+ * The parts of the first candidate, or an API_ERROR that says why there are none: the prompt was
+ * blocked (no candidate), or the candidate stopped without content, a missing parts array
+ * included, which thinking that spends the whole budget may produce. An empty array is valid.
+ */
+function firstCandidateParts(body: GeminiResponse): GeminiPart[] {
+  const candidate = body.candidates?.[0];
+  if (candidate === undefined) {
+    const blockReason = body.promptFeedback?.blockReason ?? "none";
+    throw new LLMError("API_ERROR", `Gemini returned no candidate (promptFeedback.blockReason: ${blockReason})`);
+  }
+  const parts = candidate.content?.parts;
+  if (!Array.isArray(parts)) {
+    const finishReason = candidate.finishReason ?? "none";
+    throw new LLMError("API_ERROR", `Gemini candidate has no content (finishReason: ${finishReason})`);
+  }
+  return parts;
 }

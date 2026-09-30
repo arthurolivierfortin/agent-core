@@ -187,3 +187,22 @@ test("hypothesis H3: functionCall ids are optional", () => {
   const textOnly = fromGeminiResponse({ candidates: [{ content: { role: "model", parts: [{ text: "Bonjour" }] } }] });
   assert.deepStrictEqual(textOnly.toolCalls, []);
 });
+
+test("fromGeminiResponse throws API_ERROR on a body without candidate or without content", () => {
+  assert.throws(() => fromGeminiResponse({}), apiError(/no candidate/));
+  assert.throws(() => fromGeminiResponse({ candidates: [] }), apiError(/no candidate/));
+  assert.throws(() => fromGeminiResponse({ promptFeedback: { blockReason: "SAFETY" } }), apiError(/SAFETY/));
+  assert.throws(
+    () => fromGeminiResponse({ candidates: [{ finishReason: "MAX_TOKENS" }] }),
+    apiError(/no content/, /MAX_TOKENS/),
+  );
+  // Parts missing counts as no content: thinking may spend the whole budget.
+  assert.throws(
+    () => fromGeminiResponse({ candidates: [{ content: { role: "model" }, finishReason: "MAX_TOKENS" }] }),
+    apiError(/MAX_TOKENS/),
+  );
+  // An empty parts array is a valid empty answer, not an error.
+  const empty = fromGeminiResponse({ candidates: [{ content: { role: "model", parts: [] } }] });
+  assert.equal(empty.content, "");
+  assert.deepStrictEqual(empty.toolCalls, []);
+});
