@@ -1,0 +1,646 @@
+{
+  "runs": [
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-a",
+        "context": "fenetre-100k"
+      },
+      "run": 1,
+      "passed": true,
+      "failures": [],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": 6,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "reglages"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "reglages"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes aux reglages.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "reglages"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes aux reglages.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-a",
+        "context": "fenetre-100k"
+      },
+      "run": 2,
+      "passed": true,
+      "failures": [],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": 6,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "reglages"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "reglages"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes aux reglages.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "reglages"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes aux reglages.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-a",
+        "context": "fenetre-100k"
+      },
+      "run": 3,
+      "passed": true,
+      "failures": [],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": 6,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "reglages"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "reglages"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes aux reglages.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "reglages"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes aux reglages.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-a",
+        "context": "fenetre-100k"
+      },
+      "run": 4,
+      "passed": true,
+      "failures": [],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": 6,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "reglages"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "reglages"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes aux reglages.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "reglages"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes aux reglages.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-a",
+        "context": "fenetre-100k"
+      },
+      "run": 5,
+      "passed": true,
+      "failures": [],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": 6,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "reglages"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "reglages"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes aux reglages.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "reglages"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes aux reglages.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-b",
+        "context": "fenetre-100k"
+      },
+      "run": 1,
+      "passed": true,
+      "failures": [],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": null,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "reglages"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "reglages"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes aux reglages.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "reglages"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes aux reglages.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-b",
+        "context": "fenetre-100k"
+      },
+      "run": 2,
+      "passed": false,
+      "failures": [
+        "finalState: predicate returned false"
+      ],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": null,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "profil"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "profil"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes au profil.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "profil"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes au profil.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-b",
+        "context": "fenetre-100k"
+      },
+      "run": 3,
+      "passed": true,
+      "failures": [],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": null,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "reglages"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "reglages"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes aux reglages.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "reglages"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes aux reglages.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-b",
+        "context": "fenetre-100k"
+      },
+      "run": 4,
+      "passed": false,
+      "failures": [
+        "finalState: predicate returned false"
+      ],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": null,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "profil"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "profil"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes au profil.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "profil"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes au profil.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-b",
+        "context": "fenetre-100k"
+      },
+      "run": 5,
+      "passed": true,
+      "failures": [],
+      "error": null,
+      "durationMs": 50,
+      "tokensUsed": 1500000,
+      "costUsd": null,
+      "trace": {
+        "toolCalls": [
+          {
+            "id": "call-navigate",
+            "name": "navigate",
+            "arguments": {
+              "page": "reglages"
+            }
+          }
+        ],
+        "finalState": {
+          "pages": [
+            "accueil",
+            "reglages",
+            "profil"
+          ],
+          "current": "reglages"
+        },
+        "stopReason": "completed",
+        "content": "Vous etes aux reglages.",
+        "responses": [
+          {
+            "content": "",
+            "toolCalls": [
+              {
+                "id": "call-navigate",
+                "name": "navigate",
+                "arguments": {
+                  "page": "reglages"
+                }
+              }
+            ],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          },
+          {
+            "content": "Vous etes aux reglages.",
+            "toolCalls": [],
+            "usage": {
+              "tokensIn": 500000,
+              "tokensOut": 250000
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "summary": [
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-a",
+        "context": "fenetre-100k"
+      },
+      "runs": 5,
+      "passed": 5,
+      "successRate": 1,
+      "meanDurationMs": 50,
+      "tokensUsed": 7500000,
+      "costUsd": 30
+    },
+    {
+      "scenario": "aller aux reglages",
+      "combination": {
+        "model": "fake-b",
+        "context": "fenetre-100k"
+      },
+      "runs": 5,
+      "passed": 3,
+      "successRate": 0.6,
+      "meanDurationMs": 50,
+      "tokensUsed": 7500000,
+      "costUsd": null
+    }
+  ]
+}

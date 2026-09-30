@@ -1,0 +1,2 @@
+# The demo files are compared byte for byte (CRLF in the CSV, LF in the JSON): no line-ending conversion.
+docs/demo/** -text
