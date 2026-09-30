@@ -125,3 +125,14 @@ test("TEST-8 ROADMAP : plus aucune mention de l'IDE", () => {
     assert.ok(roadmap.includes(expected), `ROADMAP sans ${expected}`);
   }
 });
+
+test("TEST-9 ROADMAP : renvois aux issues #2 et #3", () => {
+  const roadmap = readRepoFile("ROADMAP.md");
+  assert.ok(roadmap.includes("PR 6 is tracked by #2 (milestone H1)"), "ROADMAP sans renvoi à #2");
+  const tracked = roadmap.indexOf("Tracked by #3 (milestone H2)");
+  assert.notEqual(tracked, -1, "ROADMAP sans renvoi à #3");
+  const v2 = roadmap.indexOf("## V2: Second provider + evaluation on a real model");
+  const v3 = roadmap.indexOf("## V3: Self-feeding memory");
+  assert.ok(v2 !== -1 && v3 !== -1, "ROADMAP sans titre V2 ou V3");
+  assert.ok(v2 < tracked && tracked < v3, "renvoi à #3 hors de la section V2");
+});

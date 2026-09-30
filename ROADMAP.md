@@ -48,6 +48,8 @@ Each PR depends only on the previous ones, and **each PR verifies itself**. Full
 | **5** | simulator + `defineScenario` + `runScenario` | one end-to-end navigation scenario, assertion on the **simulator state** |
 | **6** | `runMatrix` + metrics + `toJSON`/`toCSV` | a 2 × 2 × 5 matrix → 20 runs, one rate per combination, a readable CSV |
 
+PRs 1 to 5 were delivered in the origin project before the copy of 2026-09-29; PR 6 is tracked by #2 (milestone H1).
+
 Three ordering points that are not arbitrary:
 
 - **PR1 is not a PR of empty files.** A tree with no content cannot be verified. The milestone is the **distribution chain** (the package builds and installs) with the types as the only content, since they *are* the contract.
@@ -64,6 +66,8 @@ Three ordering points that are not arbitrary:
 
 - A second adapter behind the same port: **no change to the engine**
 - Real evaluations: real model, simulated tools, matrix across several axes
+
+Tracked by #3 (milestone H2): the Gemini provider, the one Marcel uses, and a first real comparison report.
 
 > ### ⚠️ Correction: the subscription does not grant the API
 >
