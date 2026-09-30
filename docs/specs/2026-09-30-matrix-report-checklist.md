@@ -17,8 +17,23 @@ Spécification : docs/specs/2026-09-30-matrix-report-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] H1 · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1, même pratique que #11 et #8.
+- [H] H2 · Types de commit : `feat(testing)` pour SPEC-1 et SPEC-2, `test(testing)` pour SPEC-3 (sujets repris de la spécification), `chore(checklist)` pour le cochage des gates et l'inscription des hypothèses.
+- [H] H3 · SPEC-3 est un test de non-régression : TEST-3 n'a pas de rouge (observé par la sonde : vert dès son ajout). Le comportement existe depuis SPEC-5 de #8 ; l'assertion `error` = « predicate broke » prouve que le prédicat est appelé et lève.
+- [H] H4 · Le rouge de TEST-1 est une `AssertionError` (`+ undefined`) au premier `deepEqual`, et non un `TypeError` comme l'annonce la spécification : même raison (`report.summary` absent), seul l'ordre des assertions en décide. Le rouge de type (`TS2339 … 'summary' does not exist`) a été observé par la sonde ; le typecheck ne se lance qu'après le vert.
+- [H] H5 · `passed` se compte par `pair.filter((r) => r.passed).length`, équivalent à « `passed === true` » puisque `MatrixRun.passed` est un `boolean`.
+- [H] H6 · `successRate` et `meanDurationMs` divisent par `pair.length`, égal à `runs` de la ligne et à `options.runs` (tranche de `runs.slice(runs.length - options.runs)`).
+- [H] H7 · Emplacement des fonctions non exportées : `summarize`, `runData`, `rowData`, `sumOrNull` entre `runMatrix` et `combinationsOf`, dans cet ordre.
+- [H] H8 · Seule la première moitié de TEST-1 appelle `runMatrix` directement (typage inféré `{ model: string[] }`, exigé par la checklist) ; la seconde moitié de TEST-1, TEST-2 et TEST-3 passent par l'aide `matrix()`. Dans TEST-2, `deps` déstructure `{ model }` (type `unknown` sous `Options`) et le compare à `"a"`.
+- [H] H9 · TEST-1 rend ses quatre fakes par un indice `built` dans un tableau `scripts`, dans l'ordre des runs a/1, a/2, b/1, b/2 (produit cartésien, runs contigus).
+- [H] H10 · Dans TEST-2, la réponse sans usage est un littéral annoté `LLMResponse`, sans clé `usage` (piège écrit dans la checklist) ; les réponses du modèle « a » passent par les aides `navigate(USAGE)` et `text("tu y es", USAGE)`, dont la clé `usage` est définie.
+- [H] H11 · L'ordre des clés d'un `MatrixRun` dans `report.runs` reste celui de H5 de #8 ; seul `toJSON` fixe l'ordre de sérialisation (`runOne` inchangé).
+- [H] H12 · Le commentaire de conception de `runMatrix` s'étend en deux temps : paragraphe du résumé et renvoi vers la spécification de #12 à la tâche 1, paragraphe de `toJSON` à la tâche 2.
+- [H] H13 · Rédaction des commentaires (anglais, le pourquoi), des noms de tests et du scénario « predicat qui leve » choisie par ce plan dans le cadre fixé par la spécification.
+- [H] H14 · Les rouges et verts des tâches 1 à 3 se constatent sur le fichier (`node --test tests/agent/testing/run-matrix.test.ts` après `npm run build`) ; la suite complète ne tourne qu'aux tâches 0 et 4.
+- [H] H15 · La PR porte `Closes #12` : #12 est le dernier lot de #8 pour `summary` et `toJSON`.
