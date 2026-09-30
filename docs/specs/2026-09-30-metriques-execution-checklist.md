@@ -24,9 +24,9 @@ Spécification : docs/specs/2026-09-30-metriques-execution-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
 - [H] H4 du plan : le cas « null, jamais 0 » de TEST-3 passe déjà sur l'état SPEC-2 (coût toujours null) ; il reste un vrai test contre un modèle absent chiffré à 0 ou un rates["toString"] hérité. Les deux autres cas de TEST-3 ont été constatés rouges avant SPEC-3.
