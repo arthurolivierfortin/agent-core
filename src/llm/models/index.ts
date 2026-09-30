@@ -87,13 +87,30 @@ export type LLMErrorCode =
 /**
  * Provider error. Unlike a tool failure, it propagates up (CLAUDE.md).
  * The `code` lets you distinguish cases without parsing the message.
+ *
+ * `status` and `retryAfterMs` are numbers, never strings, and own properties only when given.
+ * `status` is set only by a provider that reports it: today GeminiLLMProvider, on every error of a
+ * non-ok response. Its absence does not say the failure was not HTTP, only that no status was reported.
  */
 export class LLMError extends Error {
   readonly code: LLMErrorCode;
+  // declare, never a plain field: under useDefineForClassFields (true for ES2022) a plain optional
+  // field would define an own property worth undefined on every LLMError (#34, D2).
+  /** HTTP status of the response that failed, when the provider reports one. */
+  declare readonly status?: number;
+  /** Delay the server asked for before a new attempt, in milliseconds, read from Retry-After. */
+  declare readonly retryAfterMs?: number;
 
-  constructor(code: LLMErrorCode, message: string, options?: { cause?: unknown }) {
+  constructor(
+    code: LLMErrorCode,
+    message: string,
+    options?: { cause?: unknown; status?: number; retryAfterMs?: number },
+  ) {
+    // Error reads the cause key only: status and retryAfterMs are ignored there.
     super(message, options);
     this.name = "LLMError";
     this.code = code;
+    if (options?.status !== undefined) this.status = options.status;
+    if (options?.retryAfterMs !== undefined) this.retryAfterMs = options.retryAfterMs;
   }
 }
