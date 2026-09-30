@@ -336,3 +336,29 @@ test("an error body that cannot be read is an API_ERROR with the status", async 
     "Gemini 500 response body could not be read: Error: socket closed",
   );
 });
+
+test("hypothesis H7: an unknown model answers 404 with error.status NOT_FOUND", async () => {
+  const message = "models/gemini-2.5-flash is not found for API version v1beta, or is not supported for generateContent.";
+  const double = respondingFetch(404, JSON.stringify({ error: { code: 404, message, status: "NOT_FOUND" } }));
+  await expectFailure(
+    double.fetch,
+    "MODEL_NOT_FOUND",
+    `Gemini has no model 'gemini-2.5-flash' (404 NOT_FOUND from ${ENDPOINT}): ${message}`,
+  );
+  assert.equal(double.count(), 1);
+});
+
+test("only a 404 whose error.status is NOT_FOUND is MODEL_NOT_FOUND", async () => {
+  const unimplemented = { error: { code: 404, message: "Method not found.", status: "UNIMPLEMENTED" } };
+  await expectFailure(
+    respondingFetch(404, JSON.stringify(unimplemented)).fetch,
+    "API_ERROR",
+    `Gemini 404 UNIMPLEMENTED from ${ENDPOINT} (check baseURL: host root, without /v1beta): Method not found.`,
+  );
+  const notFoundOn400 = { error: { code: 400, message: "x", status: "NOT_FOUND" } };
+  await expectFailure(
+    respondingFetch(400, JSON.stringify(notFoundOn400)).fetch,
+    "API_ERROR",
+    `Gemini 400 NOT_FOUND from ${ENDPOINT}: x`,
+  );
+});

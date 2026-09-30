@@ -8,6 +8,8 @@
 // tests/llm/providers/gemini/gemini-llm-provider.test.ts:
 // - H5: the API key travels in the x-goog-api-key header, never in the URL.
 //   Locked by "hypothesis H5: the API key travels in the x-goog-api-key header".
+// - H7: an unknown model answers 404 with error.status NOT_FOUND, which a wrong baseURL does not.
+//   Locked by "hypothesis H7: an unknown model answers 404 with error.status NOT_FOUND".
 // - H8: an API error body is { error: { code, message, status } }.
 //   Locked by "hypothesis H8: an API error body is { error: { code, message, status } }".
 
@@ -87,7 +89,7 @@ export class GeminiLLMProvider implements LLMProvider {
       body: JSON.stringify(body),
     });
     // Status first: an error body never reaches fromGeminiResponse, whose "no candidate" would mislead.
-    if (!res.ok) throw await httpError(res, url);
+    if (!res.ok) throw await httpError(res, url, opts.model);
     return fromGeminiResponse((await res.json()) as GeminiResponse);
   }
 
@@ -102,14 +104,18 @@ export class GeminiLLMProvider implements LLMProvider {
 /**
  * The LLMError of a non-ok response. The message quotes Gemini's error.message when the body
  * carries one (H8), else the body text, always as a bounded excerpt and never the raw body (D2).
- * A 404 points at baseURL (D8).
+ * A 404 whose error.status is NOT_FOUND is MODEL_NOT_FOUND (H7); any other 404 points at baseURL (D8).
  */
-async function httpError(res: Response, url: string): Promise<LLMError> {
+async function httpError(res: Response, url: string, model: string): Promise<LLMError> {
   const text = await readBody(res);
   const gemini = geminiErrorOf(text);
   const detail = gemini?.message ?? text;
   const extract = detail === "" ? "(empty body)" : excerpt(detail);
   const errorStatus = gemini?.status === undefined ? "" : " " + excerpt(gemini.status);
+  // Only Gemini's own NOT_FOUND names a missing model: a 404 from a wrong baseURL does not carry it.
+  if (res.status === 404 && gemini?.status === "NOT_FOUND") {
+    return new LLMError("MODEL_NOT_FOUND", `Gemini has no model '${model}' (404 NOT_FOUND from ${url}): ${extract}`);
+  }
   if (res.status === 404) {
     return new LLMError(
       "API_ERROR",
