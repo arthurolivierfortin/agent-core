@@ -253,3 +253,86 @@ test("complete() refuses a missing key and names the configured variable, never 
   });
   assert.equal(double.count(), 0);
 });
+
+// Transport errors (#25). Each case calls complete() on "hi" for MODEL, with a fetch double.
+
+const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+
+/** A fetch double that answers this status and body, and counts its calls. */
+function respondingFetch(status: number, body: string): { fetch: typeof fetch; count: () => number } {
+  let calls = 0;
+  const fetchFn = (async () => {
+    calls++;
+    return new Response(body, { status });
+  }) as unknown as typeof fetch;
+  return { fetch: fetchFn, count: () => calls };
+}
+
+/** A fetch double whose response has this status and a body that cannot be read: text() rejects. */
+function unreadableFetch(status: number, error: unknown): typeof fetch {
+  const res = {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => {
+      throw error;
+    },
+  };
+  return (async () => res as unknown as Response) as unknown as typeof fetch;
+}
+
+type TransportError = Error & { code: string };
+
+/** complete() under this key rejects with an LLMError of exactly this code and message, returned. */
+async function expectFailure(fetchFn: typeof fetch, code: string, message: string, key = "cle-factice-1") {
+  let failure: unknown;
+  await withEnv({ [KEY_VAR]: key }, async () => {
+    const provider = new GeminiLLMProvider({ models: DECLARED, apiKeyVar: KEY_VAR, fetch: fetchFn });
+    await assert.rejects(provider.complete([{ role: "user", content: "hi" }], { model: MODEL }), (error: unknown) => {
+      failure = error;
+      return true;
+    });
+  });
+  const error = failure as TransportError;
+  assert.equal(error.name, "LLMError");
+  assert.equal(error.code, code);
+  assert.equal(error.message, message);
+  return error;
+}
+
+test("hypothesis H8: an API error body is { error: { code, message, status } }", async () => {
+  const body = { error: { code: 400, message: "Invalid JSON payload received.", status: "INVALID_ARGUMENT" } };
+  const double = respondingFetch(400, JSON.stringify(body));
+  await expectFailure(
+    double.fetch,
+    "API_ERROR",
+    `Gemini 400 INVALID_ARGUMENT from ${ENDPOINT}: Invalid JSON payload received.`,
+  );
+  assert.equal(double.count(), 1);
+});
+
+test("a non-ok response quotes its status and a bounded excerpt of its body, never the whole body", async () => {
+  const html = respondingFetch(503, "<html>" + "x".repeat(300) + "FIN</html>");
+  await expectFailure(html.fetch, "API_ERROR", `Gemini 503 from ${ENDPOINT}: <html>${"x".repeat(194)}...`);
+  assert.equal(html.count(), 1);
+  const empty = respondingFetch(500, "");
+  await expectFailure(empty.fetch, "API_ERROR", `Gemini 500 from ${ENDPOINT}: (empty body)`);
+  assert.equal(empty.count(), 1);
+});
+
+test("a 404 that carries no Gemini error points at baseURL", async () => {
+  const double = respondingFetch(404, "<html>Not Found</html>");
+  await expectFailure(
+    double.fetch,
+    "API_ERROR",
+    `Gemini 404 from ${ENDPOINT} (check baseURL: host root, without /v1beta): <html>Not Found</html>`,
+  );
+  assert.equal(double.count(), 1);
+});
+
+test("an error body that cannot be read is an API_ERROR with the status", async () => {
+  await expectFailure(
+    unreadableFetch(500, new Error("socket closed")),
+    "API_ERROR",
+    "Gemini 500 response body could not be read: Error: socket closed",
+  );
+});

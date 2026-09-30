@@ -1,12 +1,15 @@
 // Gemini provider (#19): transports to generateContent the request that toGeminiRequest builds,
 // and returns what fromGeminiResponse reads. Design: docs/specs/2026-09-30-gemini-provider-design.md.
-// Transport errors (non-ok response, fetch rejection, unreadable JSON) and key redaction belong to
-// #25; the registry and the barrel exports belong to #26, so no barrel serves this module yet.
+// Transport errors (#25): docs/specs/2026-09-30-gemini-errors-design.md. No LLMError of this module
+// chains a cause, and an external string (body, exception) enters a message only as a bounded excerpt.
+// The registry and the barrel exports belong to #26, so no barrel serves this module yet.
 //
-// Hypothesis not yet verified against the real API, locked by a test on a fetch double in
+// Hypotheses not yet verified against the real API, each locked by a test on a fetch double in
 // tests/llm/providers/gemini/gemini-llm-provider.test.ts:
 // - H5: the API key travels in the x-goog-api-key header, never in the URL.
 //   Locked by "hypothesis H5: the API key travels in the x-goog-api-key header".
+// - H8: an API error body is { error: { code, message, status } }.
+//   Locked by "hypothesis H8: an API error body is { error: { code, message, status } }".
 
 import { LLMError } from "../../models/index.js";
 import type { LLMResponse, Message, ModelInfo } from "../../models/index.js";
@@ -21,6 +24,8 @@ import type { GeminiResponse } from "./gemini-wire.js";
 
 /** The variable read when the configuration names none. Not exported: the public surface is #26's. */
 const DEFAULT_API_KEY_VAR = "GEMINI_API_KEY";
+/** Longest external string a message quotes: a Gemini error sentence fits, an HTML page is cut (D3). */
+const MAX_EXCERPT_LENGTH = 200;
 
 export type GeminiConfig = {
   /** The models this provider offers, declared rather than queried (ADR-AGENT-0017). */
@@ -75,11 +80,14 @@ export class GeminiLLMProvider implements LLMProvider {
       );
     }
     const body = toGeminiRequest(messages, opts.tools);
-    const res = await this.fetchFn(geminiGenerateContentUrl(opts.model, this.baseURL), {
+    const url = geminiGenerateContentUrl(opts.model, this.baseURL);
+    const res = await this.fetchFn(url, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify(body),
     });
+    // Status first: an error body never reaches fromGeminiResponse, whose "no candidate" would mislead.
+    if (!res.ok) throw await httpError(res, url);
     return fromGeminiResponse((await res.json()) as GeminiResponse);
   }
 
@@ -89,4 +97,56 @@ export class GeminiLLMProvider implements LLMProvider {
     const offered = this.declaredModels.map((declared) => declared.id).join(", ");
     throw new LLMError("MODEL_NOT_FOUND", `Model '${model}' is not declared on this provider. Declared: ${offered}`);
   }
+}
+
+/**
+ * The LLMError of a non-ok response. The message quotes Gemini's error.message when the body
+ * carries one (H8), else the body text, always as a bounded excerpt and never the raw body (D2).
+ * A 404 points at baseURL (D8).
+ */
+async function httpError(res: Response, url: string): Promise<LLMError> {
+  const text = await readBody(res);
+  const gemini = geminiErrorOf(text);
+  const detail = gemini?.message ?? text;
+  const extract = detail === "" ? "(empty body)" : excerpt(detail);
+  const errorStatus = gemini?.status === undefined ? "" : " " + excerpt(gemini.status);
+  if (res.status === 404) {
+    return new LLMError(
+      "API_ERROR",
+      `Gemini 404${errorStatus} from ${url} (check baseURL: host root, without /v1beta): ${extract}`,
+    );
+  }
+  return new LLMError("API_ERROR", `Gemini ${res.status}${errorStatus} from ${url}: ${extract}`);
+}
+
+/** The string status and message of the error object of a JSON body, or undefined without one (H8). */
+function geminiErrorOf(text: string): { status?: string; message?: string } | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const error: unknown = (parsed as { error?: unknown } | null)?.error;
+  if (typeof error !== "object" || error === null) return undefined;
+  const { status, message } = error as { status?: unknown; message?: unknown };
+  return {
+    status: typeof status === "string" ? status : undefined,
+    message: typeof message === "string" ? message : undefined,
+  };
+}
+
+/** The body text. A body that cannot be read is an API_ERROR with the status, not an escaping exception. */
+async function readBody(res: Response): Promise<string> {
+  try {
+    return await res.text();
+  } catch (cause) {
+    const reason = excerpt(String(cause));
+    throw new LLMError("API_ERROR", `Gemini ${res.status} response body could not be read: ${reason}`);
+  }
+}
+
+/** At most MAX_EXCERPT_LENGTH characters, then "..." when the text was cut. */
+function excerpt(text: string): string {
+  return text.length <= MAX_EXCERPT_LENGTH ? text : text.slice(0, MAX_EXCERPT_LENGTH) + "...";
 }
