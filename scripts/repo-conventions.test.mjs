@@ -152,3 +152,21 @@ test("TEST-10 ROADMAP : titre agent-core, sans renvoi au plan d'origine", () => 
     assert.ok(lines.includes(heading), `ROADMAP sans le titre ${heading}`);
   }
 });
+
+test("TEST-8 (issue 9) le guide et le README documentent la matrice, ses exports et replayRun", () => {
+  const symbols = ["runMatrix", "withMetrics", "RateTable", "summary", "toJSON", "toCSV", "toRunsCSV", "replayRun"].map((s) => `\`${s}\``);
+  const guide = readRepoFile("docs/guide-agent-package.md");
+  const readme = readRepoFile("README.md");
+  const sections = [
+    ["guide", sectionAfterHeading(guide, "### Evaluation matrix: runMatrix, report, replay"), [...symbols, "docs/demo/h1-matrix/", "AGENT_CORE_WRITE_DEMO"]],
+    ["README", sectionAfterHeading(readme, "## Evaluating agents over a matrix"), [...symbols, "docs/demo/h1-matrix/"]],
+  ];
+  for (const [name, section, expected] of sections) {
+    for (const text of expected) assert.ok(section.includes(text), `${name} : section de la matrice sans ${text}`);
+    assert.ok(!section.includes(String.fromCharCode(0x2014)), `${name} : tiret cadratin dans la section de la matrice`);
+  }
+  for (const file of ["matrix-csv.ts", "replay-run.ts"]) assert.ok(guide.includes(file), `guide : arborescence sans ${file}`);
+  assert.ok(!guide.includes("llm/infrastructure/with-metrics.ts"), "guide : ancien emplacement de withMetrics");
+  const entry = splitLines(readme).find((line) => line.startsWith("| `./testing` |")) ?? "";
+  for (const name of ["runMatrix", "replayRun"]) assert.ok(entry.includes(name), `README : ligne ./testing sans ${name}`);
+});

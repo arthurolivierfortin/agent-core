@@ -303,3 +303,84 @@ test("a finalState predicate that throws fails its run with the error, and the m
   assert.deepEqual([next.passed, next.error], [true, null]);
   assert.deepEqual(report.summary.map((r) => [r.passed, r.successRate]), [[0, 0], [1, 1]]);
 });
+
+test("report.toCSV() writes one RFC 4180 line per summary row, CRLF, an empty cell for null", async () => {
+  let t = 0;
+  const report = await runMatrix({
+    scenarios: [scenario("aller\naux reglages", "reglages")],
+    axes: { model: ["fake,a", 'fake"b'], "max,tokens": [8] },
+    runs: 1,
+    deps: ({ model }) => {
+      const responses = model === "fake,a" ? [navigate(USAGE), text("tu y es", USAGE)] : [navigate(), text("tu y es")];
+      return wiring(new FakeLLMProvider({ responses }));
+    },
+    rates: { "fake-model": RATE },
+    now: () => (t += 10),
+  });
+
+  assert.equal(
+    report.toCSV(),
+    'scenario,model,"max,tokens",runs,passed,successRate,meanDurationMs,tokensUsed,costUsd\r\n' +
+      '"aller\naux reglages","fake,a",8,1,1,1,50,1500000,6\r\n"aller\naux reglages","fake""b",8,1,1,1,50,,\r\n',
+  );
+  const noAxis = (await matrix({})).toCSV();
+  assert.equal(noAxis.split("\r\n")[0], "scenario,runs,passed,successRate,meanDurationMs,tokensUsed,costUsd");
+});
+
+test("report.toRunsCSV() writes one line per run: failures joined, a thrown error quoted, null empty", async () => {
+  const strict = defineScenario({
+    name: "aller aux reglages",
+    env: app,
+    input: "amene-moi aux reglages",
+    expect: { toolsUsed: ["navigate"], finalState: (s: FakeAppState) => s.current === "reglages", stopReason: "completed" },
+  });
+  let t = 0;
+  const report = await matrix({
+    scenarios: [strict],
+    axes: { model: ["a", "b"], memory: [null] },
+    deps: ({ model }) => {
+      if (model === "b") throw new Error('no "b", sorry');
+      return script(text("non", USAGE))();
+    },
+    now: () => (t += 10),
+  });
+
+  assert.equal(
+    report.toRunsCSV(),
+    "scenario,model,memory,run,passed,failures,error,durationMs,tokensUsed,costUsd,stopReason\r\n" +
+      "aller aux reglages,a,,1,false,toolsUsed: missing navigate; finalState: predicate returned false,,30,750000,,completed\r\n" +
+      'aller aux reglages,b,,1,false,,"no ""b"", sorry",10,0,,\r\n',
+  );
+});
+
+test("report.toJSON() copies each run's combination, failures and trace, and each line's combination", async () => {
+  const report = await matrix({ axes: { model: ["a"] }, deps: script(text("non")) });
+  const json = report.toJSON();
+  const [run, copy] = [report.runs[0], json.runs[0]];
+  const pairs = [
+    [copy.combination, run.combination],
+    [copy.failures, run.failures],
+    [copy.trace, run.trace],
+    [copy.trace.toolCalls, run.trace.toolCalls],
+    [copy.trace.responses, run.trace.responses],
+    [json.summary[0].combination, report.summary[0].combination],
+  ];
+  for (const [fresh, original] of pairs) {
+    assert.notEqual(fresh, original);
+    assert.deepEqual(fresh, original);
+  }
+  assert.deepEqual([copy.combination, copy.failures], [{ model: "a" }, ["finalState: predicate returned false"]]);
+});
+
+test("report.toJSON() keeps a thrown run's finalState, stopReason and content as null keys, through JSON too", async () => {
+  const report = await matrix({ deps: () => { throw new Error("no wiring"); } });
+  const { trace } = report.toJSON().runs[0];
+  assert.deepEqual(Object.keys(trace), ["toolCalls", "finalState", "stopReason", "content", "responses"]);
+  assert.deepEqual([trace.finalState, trace.stopReason, trace.content], [null, null, null]);
+
+  const read = JSON.parse(JSON.stringify(report)).runs[0].trace;
+  for (const key of ["finalState", "stopReason", "content"]) {
+    assert.ok(Object.hasOwn(read, key), `${key} dropped by JSON.stringify`);
+    assert.equal(read[key], null);
+  }
+});

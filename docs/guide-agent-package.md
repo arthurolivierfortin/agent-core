@@ -120,6 +120,8 @@ src/
       define-scenario.ts
       run-scenario.ts
       run-matrix.ts
+      matrix-csv.ts                 toCSV / toRunsCSV rendering, served by no barrel
+      replay-run.ts                 replayRun
       index.ts
     index.ts
 
@@ -127,7 +129,7 @@ src/
     index.ts                      re-exports llm/testing (+ agent/testing when it lands)
 ```
 
-`llm/infrastructure/with-metrics.ts`: a decorator that implements `LLMProvider` and relays to a `MetricsCollector`. It lives where it wraps.
+`metrics/application/use-cases/with-metrics.ts`: `withMetrics`, a decorator that implements `LLMProvider` and records every resolved call in a `MetricsCollector`. It lives with the metrics it feeds.
 
 `context/` is a **framework in its own right**, not a subfolder of `agent/`: many implementations serve one contract, so they are nested one folder each. Sliding window and memory differ by **algorithm**, hence `strategies/` and the port `ContextStrategy` (`ADR-AGENT-0016`).
 
@@ -250,6 +252,18 @@ The package **ships the fake provider and the simulator**. Without that, each co
 **Simulator ≠ mock.** A mock returns a frozen value; a simulator is a set of tools sharing a coherent mutable state: `navigate("réglages")` then `getCurrentPage()` must return `"réglages"`. Three rules: `env` is a **factory** (fresh state per run), expectations are **predicates** (no strict order), the report **keeps failures**.
 
 **A single run measures nothing.** N repetitions per combination, aggregated into rates: otherwise a single success does not distinguish a 95% model from a 60% model.
+
+### Evaluation matrix: runMatrix, report, replay
+
+`runMatrix` runs every scenario on every combination of the axes (their Cartesian product, the last axis varying fastest), `runs` times each, in sequence: a local provider serves one call at a time, and a fixed order keeps a report against fakes reproducible. `deps(combination)` is called once per run, so each run gets a fresh provider if it builds one.
+
+Each run is measured by its own `MetricsCollector`, fed by `withMetrics` (`metrics/application/use-cases/with-metrics.ts`) wrapped around the run's provider. A `RateTable` prices every call in dollars per million tokens, keyed by the model the call asked for; `null` marks a model that is not billed. Absent is not zero: a missing usage or rate makes `tokensUsed` or `costUsd` `null`, never `0`, and no composite score ever folds success rate, duration, tokens and cost together (`ADR-AGENT-0007`).
+
+The report holds `runs`, one per execution with its trace (dispatched calls, final state, stop reason, content, every resolved response), and `summary`, one line per (scenario, combination) pair. `toJSON` hands back fresh plain data, so `JSON.stringify(report)` is the JSON report. `toCSV` writes one line per `summary` line and `toRunsCSV` one line per run: RFC 4180, CRLF line endings, an empty cell for `null`, one column per axis named by its key, axis values rendered by `String`. Pass labels as axis values (`memory: ["window-8", "window-20"]`) and build the objects in `deps`: an object value would render as `[object Object]`.
+
+`replayRun` takes a scenario, a run and the `deps` to replay it with, feeds `run.trace.responses` to a `FakeLLMProvider` and returns the `ScenarioResult`; the caller compares. The replay is identical (same `toolCalls`, `finalState`, `stopReason`) only if `deps` carries the same agent, context strategy, budget and landing instruction as the run, and if `scenario.env` is deterministic. `run` may come from a saved report read back by `JSON.parse`. The trace of a run whose provider threw stops short, so its replay rejects with the fake's end-of-script error.
+
+The H1 demonstration lives in `docs/demo/h1-matrix/`: two fake models, one context, five runs, one model priced and one not, a failed run replayed. `tests/agent/testing/matrix-demo.test.ts` compares `report.json`, `summary.csv` and `runs.csv` byte for byte on every `npm run test`, and the default suite writes nothing. After a deliberate change, regenerate them with `AGENT_CORE_WRITE_DEMO=1`: `npm run build`, then `AGENT_CORE_WRITE_DEMO=1 node --test tests/agent/testing/matrix-demo.test.ts`. `.gitattributes` marks them `-text`, so git never rewrites their line endings.
 
 ## Branch and commit conventions
 

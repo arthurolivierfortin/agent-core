@@ -1,0 +1,11 @@
+scenario,model,context,run,passed,failures,error,durationMs,tokensUsed,costUsd,stopReason
+aller aux reglages,fake-a,fenetre-100k,1,true,,,50,1500000,6,completed
+aller aux reglages,fake-a,fenetre-100k,2,true,,,50,1500000,6,completed
+aller aux reglages,fake-a,fenetre-100k,3,true,,,50,1500000,6,completed
+aller aux reglages,fake-a,fenetre-100k,4,true,,,50,1500000,6,completed
+aller aux reglages,fake-a,fenetre-100k,5,true,,,50,1500000,6,completed
+aller aux reglages,fake-b,fenetre-100k,1,true,,,50,1500000,,completed
+aller aux reglages,fake-b,fenetre-100k,2,false,finalState: predicate returned false,,50,1500000,,completed
+aller aux reglages,fake-b,fenetre-100k,3,true,,,50,1500000,,completed
+aller aux reglages,fake-b,fenetre-100k,4,false,finalState: predicate returned false,,50,1500000,,completed
+aller aux reglages,fake-b,fenetre-100k,5,true,,,50,1500000,,completed

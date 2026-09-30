@@ -58,6 +58,7 @@ test("`./testing` exposes the scenario harness", () => {
   assert.equal(typeof testing.defineScenario, "function");
   assert.equal(typeof testing.runScenario, "function");
   assert.equal(typeof testing.runMatrix, "function");
+  assert.equal(typeof testing.replayRun, "function");
 });
 
 test("`.` and `./llm` do not leak the testing surface", () => {
@@ -69,6 +70,7 @@ test("`.` and `./llm` do not leak the testing surface", () => {
     assert.equal(surface.defineScenario, undefined);
     assert.equal(surface.runScenario, undefined);
     assert.equal(surface.runMatrix, undefined);
+    assert.equal(surface.replayRun, undefined);
   }
 });
 

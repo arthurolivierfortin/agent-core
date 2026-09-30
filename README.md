@@ -100,7 +100,7 @@ Four subpaths, **opt-in**: an agent receives only what you pass it, nothing impl
 | `.` | engine, ports, types, **the agentic loop** (**no disk access**, importable anywhere) | **available** (contract models, LLM layer, context layer, tools port, agent layer) |
 | `./llm` | LLM layer: the `LLMProvider` port, `OllamaLLMProvider`, the `PROVIDERS` registry + `resolveProvider`, and the LLM models | **available** |
 | `./tools` | generic file tools (coupled to `fs`, opt-in) | **empty**: it resolves, and exports nothing yet |
-| `./testing` | test harness: `FakeLLMProvider` + `checkProviderContract`, the fakeApp simulator, `defineScenario` and `runScenario` | **available** (`FakeLLMProvider`, `checkProviderContract`, `fakeApp`, `defineScenario`, `runScenario`) |
+| `./testing` | test harness: `FakeLLMProvider` + `checkProviderContract`, the fakeApp simulator, `defineScenario`, `runScenario`, the evaluation matrix `runMatrix` and `replayRun` | **available** (`FakeLLMProvider`, `checkProviderContract`, `fakeApp`, `defineScenario`, `runScenario`, `runMatrix`, `replayRun`) |
 
 > `./tools` is declared in the `exports` map because the entry points are a design choice (`ADR-AGENT-0002`), and it now resolves to a real, empty module. It carries **no symbol** until the file tools land, so importing it is safe but pointless. Note the split: the tools **port** and the dispatcher are pure and ship from `.`; only the concrete tools that touch the disk will live behind `./tools`.
 
@@ -224,6 +224,53 @@ while (state.stopReason === undefined) {
   // inspect state.history, state.toolCalls, state.iterations between iterations
 }
 ```
+
+---
+
+## Evaluating agents over a matrix
+
+`runMatrix`, from `./testing`, runs scenarios over the Cartesian product of axes, N runs each, in sequence, and returns a report: `runs`, one per execution with its trace, and `summary`, one line per (scenario, combination) pair with its success rate, mean duration, tokens and cost. Each run is measured by `withMetrics`; a `RateTable` prices it in dollars per million tokens, `null` for a model that is not billed. A missing usage or rate reads `null`, never `0`, and nothing folds the columns into a score (`ADR-AGENT-0007`).
+
+`toJSON` hands back fresh plain data, so `JSON.stringify(report)` is the JSON report. `toCSV` (one line per `summary` line) and `toRunsCSV` (one line per run) follow RFC 4180 with CRLF line endings and an empty cell for `null`. `replayRun` replays a run, a failed one typically, from the responses its trace recorded, through a `FakeLLMProvider`: same agent and context, same calls and final state.
+
+```ts
+import { writeFileSync } from "node:fs";
+import { HeuristicTokenCounter, OllamaLLMProvider, SlidingWindowStrategy } from "@arthurolivierfortin/agent-core";
+import { defineScenario, fakeApp, replayRun, runMatrix } from "@arthurolivierfortin/agent-core/testing";
+
+// `navigateur` is the agent declared in "Running an agent" above.
+const llm = new OllamaLLMProvider({
+  models: [{ id: "qwen2.5:0.5b", supportsTools: true }, { id: "llama3.2:1b", supportsTools: true }],
+});
+const allerAuxReglages = defineScenario({
+  name: "aller aux reglages",
+  env: () => fakeApp({ pages: ["accueil", "reglages"], current: "accueil" }),
+  input: "amene-moi aux reglages",
+  expect: { toolsUsed: ["navigate"], finalState: (s) => s.current === "reglages" },
+});
+const context = new SlidingWindowStrategy({ maxTokens: 4000, counter: new HeuristicTokenCounter() });
+
+const report = await runMatrix({
+  scenarios: [allerAuxReglages],
+  axes: { model: ["qwen2.5:0.5b", "llama3.2:1b"] },
+  runs: 5,
+  deps: ({ model }) => ({ agent: navigateur, llm, context, model }),
+  rates: { "qwen2.5:0.5b": null, "llama3.2:1b": null }, // local models: not billed, cost stays null
+});
+
+console.table(report.summary);
+writeFileSync("report.json", JSON.stringify(report, null, 2));
+writeFileSync("summary.csv", report.toCSV());
+writeFileSync("runs.csv", report.toRunsCSV());
+
+const failed = report.runs.find((run) => !run.passed);
+if (failed) {
+  const replay = await replayRun(allerAuxReglages, failed, { agent: navigateur, context });
+  console.log(replay.toolCalls, replay.finalState);
+}
+```
+
+The package's own proof is versioned in [`docs/demo/h1-matrix/`](docs/demo/h1-matrix/): two fake models, five runs each, one priced and one not, its JSON report and both CSV files, checked byte for byte by the test suite.
 
 ---
 
