@@ -84,3 +84,15 @@ test("TEST-5 le registre des ADR porte la note d'origine", () => {
   assert.ok(!note.includes("—"), "registre ADR : tiret cadratin dans la note d'origine");
   assert.ok(registry.includes("An ADR is immutable once accepted"), "registre ADR : règle d'immuabilité disparue");
 });
+
+test("TEST-7 ROADMAP : le cycle se fait avec Marcel", () => {
+  const roadmap = readRepoFile("ROADMAP.md");
+  assert.ok(splitLines(roadmap).includes("## The cycle with Marcel"), "ROADMAP sans le titre ## The cycle with Marcel");
+  for (const expected of ["integration into Marcel (#4)", "Every abstraction added before Marcel consumes the package"]) {
+    assert.ok(roadmap.includes(expected), `ROADMAP sans ${expected}`);
+  }
+  for (const gone of ["PMC/", "TECH-19", "January 2027"]) {
+    assert.ok(!roadmap.includes(gone), `ROADMAP contient encore ${gone}`);
+  }
+  assert.ok(!/\bS7\b/.test(roadmap), "ROADMAP contient encore S7");
+});

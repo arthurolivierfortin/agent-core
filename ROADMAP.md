@@ -179,19 +179,17 @@ src/
 
 ---
 
-## The cycle with the IDE repo
+## The cycle with Marcel
 
 The real engine that improves the package is not this roadmap, it is the confrontation with a real consumer:
 
 ```
-V1 shipped → integration into the IDE repo → harness on the real features
-   ↑                                                     │
-   └──────── we come back to improve the package ←──── a wall appears
+V1 shipped → integration into Marcel (#4) → harness on the real features
+   ↑                                                    │
+   └──────── we come back to improve the package ←─── a wall appears
 ```
 
-**Point of vigilance.** According to `PMC/CONTEXT-AGENT.md`, the IDE stack is decided at `TECH-19` in early S7 (January 2027) and Flux E starts at that point. The package will therefore be "finished" several months before its consumer exists.
-
-Practical consequence: **keep V1 truly minimal.** Every abstraction added before then is a bet with no feedback, and that is exactly how you build the wrong abstraction.
+Practical consequence: **keep V1 truly minimal.** Every abstraction added before Marcel consumes the package is a bet with no feedback, and that is exactly how you build the wrong abstraction.
 
 ---
 
