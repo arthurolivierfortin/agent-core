@@ -8,3 +8,6 @@ export * from "./llm/index.js";
 export * from "./context/index.js";
 export * from "./tools/index.js";
 export * from "./agent/index.js";
+// metrics/ turns provider calls into totals: pure, disk-free, priced only from a rate table the
+// caller passes (ADR-AGENT-0007). Served by `.`; neither ./llm nor ./testing re-exports it.
+export * from "./metrics/index.js";

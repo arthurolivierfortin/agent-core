@@ -13,7 +13,10 @@ import type {
   Budget,
   CompletionOptions,
   LLMProvider,
+  MetricsTotal,
   ModelInfo,
+  Rate,
+  RateTable,
   SlidingWindowReport,
   StopReason,
   Tool,
@@ -21,6 +24,7 @@ import type {
   ToolDefinition,
   ToolOutcome,
   ToolResult,
+  UsageRecord,
 } from "@arthurolivierfortin/agent-core";
 
 test("`.` exposes the engine surface", () => {
@@ -188,4 +192,33 @@ test("`.` exposes the loop's contracts and the types a run needs", async () => {
   assert.equal(start.iterations, 0);
   assert.equal(result.content, "bonjour");
   assert.equal(reason, "completed");
+});
+
+test("`.` exposes the metrics framework, and neither `./llm` nor `./testing` carries it", () => {
+  const surface = root as Record<string, unknown>;
+  for (const name of ["aggregate", "MetricsCollector"]) {
+    assert.equal(typeof surface[name], "function", `missing ${name}`);
+  }
+  for (const barrel of [llm, testing]) {
+    const other = barrel as Record<string, unknown>;
+    assert.equal(other.aggregate, undefined);
+    assert.equal(other.MetricsCollector, undefined);
+  }
+});
+
+// Same reasoning as the type tests above: these names are types, so `node --test` cannot see them
+// leave the barrel. The table is annotated where it is passed to the package, the records and the
+// totals where the package hands them back, and the gate that enforces it is `npm run typecheck`.
+test("`.` exposes the metrics types a caller needs to record and price calls", () => {
+  const rate: Rate = { usdPerMillionTokensIn: 2, usdPerMillionTokensOut: 8 };
+  const rates: RateTable = { "m-a": rate };
+  const collector = new root.MetricsCollector();
+  collector.record({ model: "m-a", tokensIn: 500_000, tokensOut: 250_000, durationMs: 10 });
+
+  const records: UsageRecord[] = collector.records();
+  const fromCollector: MetricsTotal = collector.total(rates);
+  const fromFunction: MetricsTotal = root.aggregate(records, rates);
+
+  assert.equal(fromCollector.calls, 1);
+  assert.equal(fromFunction.calls, 1);
 });
