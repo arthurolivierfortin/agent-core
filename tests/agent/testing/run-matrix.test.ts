@@ -303,3 +303,26 @@ test("a finalState predicate that throws fails its run with the error, and the m
   assert.deepEqual([next.passed, next.error], [true, null]);
   assert.deepEqual(report.summary.map((r) => [r.passed, r.successRate]), [[0, 0], [1, 1]]);
 });
+
+test("report.toCSV() writes one RFC 4180 line per summary row, CRLF, an empty cell for null", async () => {
+  let t = 0;
+  const report = await runMatrix({
+    scenarios: [scenario("aller\naux reglages", "reglages")],
+    axes: { model: ["fake,a", 'fake"b'], "max,tokens": [8] },
+    runs: 1,
+    deps: ({ model }) => {
+      const responses = model === "fake,a" ? [navigate(USAGE), text("tu y es", USAGE)] : [navigate(), text("tu y es")];
+      return wiring(new FakeLLMProvider({ responses }));
+    },
+    rates: { "fake-model": RATE },
+    now: () => (t += 10),
+  });
+
+  assert.equal(
+    report.toCSV(),
+    'scenario,model,"max,tokens",runs,passed,successRate,meanDurationMs,tokensUsed,costUsd\r\n' +
+      '"aller\naux reglages","fake,a",8,1,1,1,50,1500000,6\r\n"aller\naux reglages","fake""b",8,1,1,1,50,,\r\n',
+  );
+  const noAxis = (await matrix({})).toCSV();
+  assert.equal(noAxis.split("\r\n")[0], "scenario,runs,passed,successRate,meanDurationMs,tokensUsed,costUsd");
+});

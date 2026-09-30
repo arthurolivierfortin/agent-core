@@ -4,6 +4,7 @@ import { MetricsCollector, withMetrics } from "../../metrics/index.js";
 import type { RateTable } from "../../metrics/index.js";
 import type { AgentDeps, StopReason } from "../application/dtos/index.js";
 import type { Scenario, ScenarioEnv } from "./define-scenario.js";
+import { summaryCSV } from "./matrix-csv.js";
 import { runScenario } from "./run-scenario.js";
 
 /** One value per axis. Not exported: a consumer names it `MatrixRun<S, A>["combination"]`. */
@@ -76,6 +77,8 @@ export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]
   readonly summary: readonly MatrixSummaryRow<TAxes>[];
   /** Fresh plain data on every call, keys in the order of the types, every null kept null (ADR-AGENT-0006). */
   toJSON(): { runs: MatrixRun<TState, TAxes>[]; summary: MatrixSummaryRow<TAxes>[] };
+  /** One line per `summary` row, one column per axis: RFC 4180, CRLF, an empty cell for null. */
+  toCSV(): string;
 };
 
 /**
@@ -106,7 +109,8 @@ export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]
  * value. An arrow closed over the arrays, so it works detached from the report too.
  *
  * Design: docs/specs/2026-09-30-run-matrix-design.md (#8),
- * docs/specs/2026-09-30-matrix-report-design.md (#12).
+ * docs/specs/2026-09-30-matrix-report-design.md (#12),
+ * docs/specs/2026-09-30-csv-rejeu-demo-design.md (#9).
  */
 export async function runMatrix<TState, TAxes extends Record<string, readonly unknown[]>>(
   options: MatrixOptions<TState, TAxes>,
@@ -149,6 +153,7 @@ export async function runMatrix<TState, TAxes extends Record<string, readonly un
   const runs: MatrixRun<TState, TAxes>[] = [];
   const summary: MatrixSummaryRow<TAxes>[] = [];
   const combinations = combinationsOf(options.axes);
+  const axisKeys = Object.keys(options.axes);
   for (const scenario of options.scenarios) {
     for (const combination of combinations) {
       for (let run = 1; run <= options.runs; run++) {
@@ -157,7 +162,12 @@ export async function runMatrix<TState, TAxes extends Record<string, readonly un
       summary.push(summarize(runs.slice(runs.length - options.runs)));
     }
   }
-  return { runs, summary, toJSON: () => ({ runs: runs.map(runData), summary: summary.map(rowData) }) };
+  return {
+    runs,
+    summary,
+    toJSON: () => ({ runs: runs.map(runData), summary: summary.map(rowData) }),
+    toCSV: () => summaryCSV(summary, axisKeys),
+  };
 }
 
 /** The line of one pair, its runs in order. Never empty: `runMatrix` refuses `runs < 1` before any run. */
