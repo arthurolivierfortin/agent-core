@@ -43,6 +43,8 @@ export type MatrixRun<TState, TAxes extends Record<string, readonly unknown[]>> 
   readonly run: number;
   readonly passed: boolean;
   readonly failures: readonly string[];
+  /** The message of what the run threw, null when it threw nothing. */
+  readonly error: string | null;
   readonly durationMs: number;
   /** Null as soon as one call reported no usage: absent is not zero (ADR-AGENT-0007). */
   readonly tokensUsed: number | null;
@@ -67,8 +69,9 @@ export type MatrixReport<TState, TAxes extends Record<string, readonly unknown[]
  * ADR-AGENT-0007's "absent is not zero", and it does not exist for a run that throws, while the
  * collector keeps the calls resolved before the error.
  *
- * `step.ts` and `runScenario` stay untouched: responses are recorded by wrapping the provider,
- * the final state by wrapping `env`.
+ * A run that throws (`deps`, `env`, the provider, a predicate) fails with its `error` and a
+ * partial trace, and the matrix goes on. `step.ts` and `runScenario` stay untouched: responses
+ * are recorded by wrapping the provider, the final state by wrapping `env`.
  *
  * Design: docs/specs/2026-09-30-run-matrix-design.md (#8).
  */
@@ -88,14 +91,22 @@ export async function runMatrix<TState, TAxes extends Record<string, readonly un
     const collector = new MetricsCollector();
     const responses: LLMResponse[] = [];
     let captured: ScenarioEnv<TState> | undefined;
+    let outcome: Pick<MatrixRun<TState, TAxes>, "scenario" | "passed" | "failures" | "error" | "trace">;
     const startedAt = now();
-    const wiring = options.deps(combination);
-    const llm = recordResponses(withMetrics(wiring.llm, collector, now), responses);
-    const env = () => { captured = scenario.env(); return captured; };
-    const result = await runScenario({ ...scenario, env }, { ...wiring, llm });
-    const { toolCalls, finalState, stopReason, content, passed, failures } = result;
-    const trace = { toolCalls, finalState, stopReason, content, responses };
-    const outcome = { scenario: result.scenario, passed, failures, trace };
+    try {
+      const wiring = options.deps(combination);
+      const llm = recordResponses(withMetrics(wiring.llm, collector, now), responses);
+      const env = () => { captured = scenario.env(); return captured; };
+      const result = await runScenario({ ...scenario, env }, { ...wiring, llm });
+      const { toolCalls, finalState, stopReason, content, passed, failures } = result;
+      const trace = { toolCalls, finalState, stopReason, content, responses };
+      outcome = { scenario: result.scenario, passed, failures, error: null, trace };
+    } catch (err) {
+      const toolCalls = responses.flatMap((response) => response.toolCalls);
+      const finalState = captured === undefined ? null : captured.state;
+      const trace = { toolCalls, finalState, stopReason: null, content: null, responses };
+      outcome = { scenario: scenario.name, passed: false, failures: [], error: messageOf(err), trace };
+    }
     const durationMs = now() - startedAt;
     const { tokensIn, tokensOut, costUsd } = collector.total(options.rates);
     const tokensUsed = tokensIn === null || tokensOut === null ? null : tokensIn + tokensOut;
@@ -136,4 +147,8 @@ function recordResponses(provider: LLMProvider, sink: LLMResponse[]): LLMProvide
       return response;
     },
   };
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

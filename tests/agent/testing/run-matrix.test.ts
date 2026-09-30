@@ -7,6 +7,7 @@ import type { FakeApp, FakeAppState } from "../../../dist/agent/testing/index.js
 import { runMatrix } from "../../../dist/agent/testing/run-matrix.js";
 import type { MatrixOptions } from "../../../dist/agent/testing/run-matrix.js";
 import { HeuristicTokenCounter, SlidingWindowStrategy } from "../../../dist/context/index.js";
+import { LLMError } from "../../../dist/llm/index.js";
 import type { LLMProvider, LLMResponse, Usage } from "../../../dist/llm/index.js";
 import { FakeLLMProvider } from "../../../dist/testing/index.js";
 
@@ -167,4 +168,48 @@ test("a landing's calls are in the trace's responses, not in its dispatched tool
   assert.equal(trace.stopReason, "budget");
   assert.equal(trace.responses.length, 2);
   assert.deepEqual(trace.toolCalls.map((c) => c.name), ["navigate"]);
+});
+
+test("a provider that rejects mid-run fails that run with a partial trace, and the matrix goes on", async () => {
+  const r1 = navigate(USAGE);
+  let completions = 0;
+  const failing: LLMProvider = {
+    id: "literal",
+    supportsStreaming: () => false,
+    models: () => [{ id: "m-a", supportsTools: true }],
+    complete: async () => {
+      if (++completions === 1) return r1;
+      throw new LLMError("API_ERROR", "provider down");
+    },
+  };
+  let wirings = 0;
+  let t = 0;
+  const deps = () => (++wirings === 1 ? wiring(failing) : script(navigate(), text("tu y es"))());
+  const [first, second] = (await matrix({ runs: 2, deps, rates: { "m-a": RATE }, now: () => (t += 10) })).runs;
+
+  const { trace, ...measured } = first;
+  assert.deepEqual(measured, {
+    scenario: "aller aux reglages", combination: {}, run: 1, passed: false, failures: [],
+    error: "provider down", durationMs: 40, tokensUsed: 750_000, costUsd: 3,
+  });
+  const finalState = { pages: PAGES, current: "reglages" };
+  assert.deepEqual(trace, { toolCalls: r1.toolCalls, finalState, stopReason: null, content: null, responses: [r1] });
+  assert.equal(trace.responses[0], r1);
+  assert.deepEqual([second.passed, second.error], [true, null]);
+});
+
+test("a deps or an env that throws becomes that run's error, with what was recorded before", async () => {
+  let envCalls = 0;
+  const counted = [scenario("aller aux reglages", "reglages", () => { envCalls++; return app(); })];
+  const [lost] = (await matrix({ scenarios: counted, deps: () => { throw "no wiring"; } })).runs;
+  const { finalState, responses, toolCalls } = lost.trace;
+  assert.deepEqual(
+    [lost.error, finalState, responses, toolCalls, lost.tokensUsed, lost.costUsd, envCalls],
+    ["no wiring", null, [], [], 0, null, 0],
+  );
+
+  const provider = new FakeLLMProvider({ responses: [text("tu y es")] });
+  const broken = [scenario("aller aux reglages", "reglages", () => { throw new Error("env broke"); })];
+  const [run] = (await matrix({ scenarios: broken, deps: () => wiring(provider) })).runs;
+  assert.deepEqual([run.error, run.trace.finalState, run.trace.responses, provider.calls.length], ["env broke", null, [], 0]);
 });
