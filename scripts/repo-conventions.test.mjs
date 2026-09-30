@@ -362,3 +362,16 @@ test("TEST-4 (issue 26) le README documente Gemini et corrige ses lignes de surf
   assert.ok(!readme.includes("The variables the LLM layer reads today are"), "README : phrase des variables d'avant Gemini");
   assert.doesNotMatch(readme, GOOGLE_KEY_SHAPE);
 });
+
+test("TEST-5 (issue 26) le guide documente Gemini et son test d'intégration", () => {
+  const guide = readRepoFile("docs/guide-agent-package.md");
+  const section = sectionAfterHeading(guide, "### Gemini provider and its integration test");
+  for (const text of [...GEMINI_DOC_EXPECTED, "tests/integration/gemini.integration.test.ts"]) {
+    assert.ok(section.includes(text), `guide : sous-section Gemini sans ${text}`);
+  }
+  assert.ok(!section.includes(String.fromCharCode(0x2014)), "guide : tiret cadratin dans la sous-section Gemini");
+  for (const file of ["gemini/gemini-llm-provider.ts", "gemini/gemini-wire.ts"]) {
+    assert.ok(guide.includes(file), `guide : arborescence sans ${file}`);
+  }
+  assert.doesNotMatch(guide, GOOGLE_KEY_SHAPE);
+});
