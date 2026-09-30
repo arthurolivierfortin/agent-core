@@ -77,6 +77,8 @@ src/
     services/response-parser.ts   pure
     providers/
       ollama/ollama-llm-provider.ts    OllamaLLMProvider, a CLASS (real I/O)
+      gemini/gemini-llm-provider.ts    GeminiLLMProvider, a CLASS (real I/O)
+      gemini/gemini-wire.ts            pure generateContent translation, served by no barrel
       index.ts                    PROVIDERS: Record<ProviderID, () => LLMProvider>
     testing/                      shipped test tooling (→ ./testing, never ./llm)
       fake-llm-provider.ts          scripted provider, 2nd implementation of the port
@@ -264,6 +266,33 @@ The report holds `runs`, one per execution with its trace (dispatched calls, fin
 `replayRun` takes a scenario, a run and the `deps` to replay it with, feeds `run.trace.responses` to a `FakeLLMProvider` and returns the `ScenarioResult`; the caller compares. The replay is identical (same `toolCalls`, `finalState`, `stopReason`) only if `deps` carries the same agent, context strategy, budget and landing instruction as the run, and if `scenario.env` is deterministic. `run` may come from a saved report read back by `JSON.parse`. The trace of a run whose provider threw stops short, so its replay rejects with the fake's end-of-script error.
 
 The H1 demonstration lives in `docs/demo/h1-matrix/`: two fake models, one context, five runs, one model priced and one not, a failed run replayed. `tests/agent/testing/matrix-demo.test.ts` compares `report.json`, `summary.csv` and `runs.csv` byte for byte on every `npm run test`, and the default suite writes nothing. After a deliberate change, regenerate them with `AGENT_CORE_WRITE_DEMO=1`: `npm run build`, then `AGENT_CORE_WRITE_DEMO=1 node --test tests/agent/testing/matrix-demo.test.ts`. `.gitattributes` marks them `-text`, so git never rewrites their line endings.
+
+### Gemini provider and its integration test
+
+`GeminiLLMProvider` (`llm/providers/gemini/gemini-llm-provider.ts`) transports to Gemini's `generateContent` the body that `gemini-wire.ts` builds. `./llm` and `.` serve the class and its `GeminiConfig`; no barrel serves the wire translation. `PROVIDERS.gemini()` declares the single model named by `GEMINI_MODEL`, default `gemini-2.5-flash`.
+
+- **Key**: read from `GEMINI_API_KEY`, or from the variable `apiKeyVar` names (a name, never a value), at every `complete()` call, and kept in no field. A missing or empty key is `LLMError("MISSING_API_KEY")`, which names the variable only. Any occurrence of the key in an error message becomes `[redacted]`.
+- **Models**: declared, never discovered (`ADR-AGENT-0017`); an undeclared model is `MODEL_NOT_FOUND` before any request.
+- **No streaming**: `supportsStreaming()` returns `false`, and the instance has no `stream` member.
+- **`baseURL`**: the host root, default `https://generativelanguage.googleapis.com`, without version or trailing slash. Do not pass `/v1beta`: the provider appends it.
+
+Format hypotheses, not yet verified against the real API, each locked by a test on a fetch double: H1 to H4 in `tests/llm/providers/gemini/gemini-wire.test.ts`, H5 to H8 in `tests/llm/providers/gemini/gemini-llm-provider.test.ts`.
+
+- H1: `generateContent` is served under `v1beta`.
+- H2: tool results travel in a content of role `user`.
+- H3: a `functionCall` id is optional, synthesized `call_<i>` when absent.
+- H4: `thoughtsTokenCount` counts as output tokens.
+- H5: the key travels in the `x-goog-api-key` header.
+- H6: the `content-type` and `x-goog-api-key` headers are enough (the H5 test pins the exact header set).
+- H7: an unknown model answers 404 with `error.status` `NOT_FOUND`.
+- H8: an error body is `{ error: { code, message, status } }`.
+
+The unit suites never reach the network. `tests/integration/gemini.integration.test.ts` runs `checkProviderContract` on `PROVIDERS.gemini()` against the live API, and is skipped unless `GEMINI_INTEGRATION=1`; `scripts/repo-conventions.test.mjs` checks that the default suite skips it. Launching it is a manual step: no test suite and no agent loop runs it. With `GEMINI_API_KEY` already in the shell's environment, never written in a command or a file, from the repository root:
+
+- PowerShell (5.1 and 7): `npm run build; if ($LASTEXITCODE -eq 0) { try { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts } finally { Remove-Item Env:GEMINI_INTEGRATION -ErrorAction SilentlyContinue } }`
+- bash: `npm run build && GEMINI_INTEGRATION=1 node --test tests/integration/gemini.integration.test.ts`
+
+It makes one real call (prompt `ping`, no tool) and checks the port's shape, with no stream check. A success corroborates H1, and by construction H5 and H6. H2, H3 and H4 wait for the first real report (#20); H7 and H8 are not exercised, since no real error path is provoked.
 
 ## Branch and commit conventions
 

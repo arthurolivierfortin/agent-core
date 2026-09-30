@@ -98,7 +98,7 @@ Four subpaths, **opt-in**: an agent receives only what you pass it, nothing impl
 | Subpath | Contents | State in `0.4.0-alpha` |
 |---|---|---|
 | `.` | engine, ports, types, **the agentic loop** (**no disk access**, importable anywhere) | **available** (contract models, LLM layer, context layer, tools port, agent layer) |
-| `./llm` | LLM layer: the `LLMProvider` port, `OllamaLLMProvider`, the `PROVIDERS` registry + `resolveProvider`, and the LLM models | **available** |
+| `./llm` | LLM layer: the `LLMProvider` port, `OllamaLLMProvider`, `GeminiLLMProvider`, the `PROVIDERS` registry + `resolveProvider`, and the LLM models | **available** |
 | `./tools` | generic file tools (coupled to `fs`, opt-in) | **empty**: it resolves, and exports nothing yet |
 | `./testing` | test harness: `FakeLLMProvider` + `checkProviderContract`, the fakeApp simulator, `defineScenario`, `runScenario`, the evaluation matrix `runMatrix` and `replayRun` | **available** (`FakeLLMProvider`, `checkProviderContract`, `fakeApp`, `defineScenario`, `runScenario`, `runMatrix`, `replayRun`) |
 
@@ -109,7 +109,7 @@ Four subpaths, **opt-in**: an agent receives only what you pass it, nothing impl
 `.` re-exports the full `./llm` engine barrel, the context layer, the pure half of the tools layer, and the agent layer. The umbrella entry point carries everything the LLM layer offers (importing from `./llm` gives that layer standalone, without the rest). It exposes:
 
 - **Models** (pure types): `Role`, `Message`, `ToolCall`, `ToolDefinition`, `ToolResult`, `ToolOutcome`, `Usage`, `LLMResponse`, `LLMChunk`, `ModelInfo`, `LLMErrorCode`, and the JSON-Schema types `JSONSchemaType`, `JSONSchemaProperty`, `ToolSchema`.
-- **Engine**: the `LLMProvider` port with its `CompletionOptions`, `OllamaLLMProvider`, the `PROVIDERS` registry with `resolveProvider` and `DEFAULT_OLLAMA_MODEL`, and the `LLMError` class.
+- **Engine**: the `LLMProvider` port with its `CompletionOptions`, `OllamaLLMProvider`, `GeminiLLMProvider` with its configuration `GeminiConfig`, the `PROVIDERS` registry with `resolveProvider`, `DEFAULT_OLLAMA_MODEL` and `DEFAULT_GEMINI_MODEL`, and the `LLMError` class.
 - **Context**: the `ContextStrategy` and `TokenCounter` ports, `SlidingWindowStrategy` (the V1 baseline: keep the newest history that fits, pin the system message, never split a tool call from its result) and `HeuristicTokenCounter` (characters divided by four, approximate by design, `ADR-AGENT-0008`). `SlidingWindowConfig`'s optional `onBuild` reports what a call kept and dropped (`SlidingWindowReport`), a reporting hook on this one strategy's own config, not a member of the port (`ADR-AGENT-0016`). There is no `./context` subpath: the layer has no standalone consumer yet (`ADR-AGENT-0012`).
 - **Tools**: the `Tool` port, `dispatchTool` (which never throws) and `toToolDefinition`. All pure, hence here rather than behind `./tools`.
 - **Agent**: `AgenticLLM`, `defineAgent`, and the loop's contracts `AgentDefinition`, `AgentDeps`, `AgentInput`, `AgentState`, `AgentResult`, `Budget`, `StopReason`, plus `DEFAULT_LANDING_INSTRUCTION`.
@@ -276,7 +276,7 @@ The package's own proof is versioned in [`docs/demo/h1-matrix/`](docs/demo/h1-ma
 
 ## Using the LLM layer (`./llm`)
 
-The `./llm` subpath ships the LLM layer: the `LLMProvider` port, the `OllamaLLMProvider` adapter, the `PROVIDERS` registry with `resolveProvider`, and the LLM models. It has **no import-time side effect** (no disk, no `.env`): it reads only `process.env`.
+The `./llm` subpath ships the LLM layer: the `LLMProvider` port, the `OllamaLLMProvider` and `GeminiLLMProvider` adapters, the `PROVIDERS` registry with `resolveProvider`, and the LLM models. It has **no import-time side effect** (no disk, no `.env`): it reads only `process.env`.
 
 ### Quick start
 
@@ -323,12 +323,15 @@ import { PROVIDERS, resolveProvider } from "@arthurolivierfortin/agent-core/llm"
 
 // Direct, typed access to a known provider:
 const a = PROVIDERS.ollama(); // declares the single model named by OLLAMA_MODEL
+const c = PROVIDERS.gemini(); // declares the single model named by GEMINI_MODEL
 
 // From a runtime string (e.g. an env var); throws LLMError("UNKNOWN_PROVIDER") on an unknown id:
 const b = resolveProvider(process.env.LLM_PROVIDER ?? "ollama");
 ```
 
 `PROVIDERS.ollama()` declares **one** model, `process.env.OLLAMA_MODEL ?? DEFAULT_OLLAMA_MODEL`, read at call time. It is the environment-driven shortcut; offering several models is the explicit path, `new OllamaLLMProvider({ models: [...] })`. The library reads `process.env`; the consuming application loads its `.env`.
+
+`PROVIDERS.gemini()` likewise declares **one** model, `process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL` (`gemini-2.5-flash`), read at call time, with `supportsTools: true`. It reads no API key: `GeminiLLMProvider` reads it at every `complete()` call. See [Setting up Gemini](#setting-up-gemini).
 
 ### Verifying a provider
 
@@ -362,11 +365,70 @@ The library reads `process.env`; the consuming application loads its `.env` (e.g
 
 ---
 
+## Setting up Gemini
+
+`GeminiLLMProvider` talks to Google's Gemini API over HTTPS, through its `generateContent` endpoint. It is a hosted, paid service: the default test suite never calls it.
+
+```ts
+import { GeminiLLMProvider } from "@arthurolivierfortin/agent-core/llm";
+
+const provider = new GeminiLLMProvider({ models: [{ id: "gemini-2.5-flash", supportsTools: true }] });
+const res = await provider.complete([{ role: "user", content: "Bonjour !" }], { model: "gemini-2.5-flash" });
+```
+
+- **The API key.** The provider reads it from the environment variable `GEMINI_API_KEY`; the constructor's `apiKeyVar` names another variable (its **name**, never the key itself). The key is read at every `complete()` call and kept in no field. A missing or empty key raises `LLMError("MISSING_API_KEY")`, whose message names the variable, never a value. Any occurrence of the key in an error message is replaced by `[redacted]`.
+- **Declared models.** Models are declared, never discovered (`ADR-AGENT-0017`): the constructor's `models`, or `GEMINI_MODEL` for `PROVIDERS.gemini()`, default `gemini-2.5-flash`. Asking for a model you did not declare raises `LLMError("MODEL_NOT_FOUND")` before any request.
+- **No streaming.** `supportsStreaming()` returns `false` and the instance has no `stream` member: use `complete()`.
+- **`baseURL`.** The host root, default `https://generativelanguage.googleapis.com`, without version or trailing slash. Do not pass `/v1beta`: the provider appends it. A 404 that does not come from Gemini says "check baseURL" in its message.
+
+| Variable | Default | Read by |
+|---|---|---|
+| `GEMINI_API_KEY` | none | `GeminiLLMProvider.complete()`, unless `apiKeyVar` names another variable |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | `PROVIDERS.gemini()` / `resolveProvider("gemini")` |
+
+The wire format rests on hypotheses not yet verified against the real API, each locked by a test on a fetch double in `tests/llm/providers/gemini/`:
+
+- **H1**: `generateContent` is served under `v1beta`.
+- **H2**: tool results travel in a content of role `user`.
+- **H3**: a `functionCall` id is optional, synthesized `call_<i>` when absent.
+- **H4**: `thoughtsTokenCount` counts as output tokens.
+- **H5**: the key travels in the `x-goog-api-key` header.
+- **H6**: the `content-type` and `x-goog-api-key` headers are enough (the H5 test pins the exact header set).
+- **H7**: an unknown model answers 404 with `error.status` `NOT_FOUND`.
+- **H8**: an error body is `{ error: { code, message, status } }`.
+
+### Running the integration test
+
+`tests/integration/gemini.integration.test.ts` runs `checkProviderContract` on `PROVIDERS.gemini()` against the live API. It is skipped unless `GEMINI_INTEGRATION=1` is set. Launching it is a manual step: no test suite and no agent loop runs it.
+
+Prerequisite: `GEMINI_API_KEY` is already in the shell's environment, set outside any command line and any file, for example as a user environment variable, or by a masked prompt whose value reaches neither the command line nor the history:
+
+- PowerShell 7.1 or later: `$env:GEMINI_API_KEY = Read-Host -MaskInput "GEMINI_API_KEY"`
+- bash: `read -rs GEMINI_API_KEY && export GEMINI_API_KEY`
+
+Then, from the repository root, in PowerShell (5.1 and 7):
+
+```
+npm run build; if ($LASTEXITCODE -eq 0) { try { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts } finally { Remove-Item Env:GEMINI_INTEGRATION -ErrorAction SilentlyContinue } }
+```
+
+or in bash:
+
+```
+npm run build && GEMINI_INTEGRATION=1 node --test tests/integration/gemini.integration.test.ts
+```
+
+Setting `GEMINI_MODEL` first targets another model; without it, `gemini-2.5-flash`. Success: exit code 0, one test passed, none skipped. Failure: the assertion lists `report.checks`, whose every `detail` is a redacted message; with `GEMINI_INTEGRATION=1` and no key, the test fails on `MISSING_API_KEY` rather than being skipped. Afterwards, `Remove-Item Env:GEMINI_API_KEY` (PowerShell) or `unset GEMINI_API_KEY` (bash) removes the key from the shell.
+
+What the test checks: one real `generateContent` call (prompt `ping`, no tool), then the shape checks of `checkProviderContract`: `id`, `models()`, `supportsStreaming()` a boolean, the local refusal of an undeclared model (no network), `complete()` resolves, `content` a string, `toolCalls` an array, `usage` shaped `{ tokensIn, tokensOut }` when present; no stream check. It targets **H1**; a success also corroborates **H5** and **H6** by construction, since the real request carries only those two headers. It does not verify **H2**, **H3** and **H4** (no tool, no tool result, `thoughtsTokenCount` unchecked), which wait for the first real report (#20), nor **H7** and **H8** (no real error path is provoked).
+
+---
+
 ## Configuration
 
 **A library does not read a config file.** It reads `process.env`; it is the **consuming application** that loads its `.env` (e.g. via `dotenv` in its entry point). This package never loads a `.env` on import: doing so would inject variables into the consumer's `process.env`, which is not a library's role.
 
-API keys and provider URLs therefore go **through the consumer's environment**, never hardcoded, never committed. The variables the LLM layer reads today are **`OLLAMA_HOST`** (default `http://localhost:11434`) and **`OLLAMA_MODEL`** (default `qwen2.5:0.5b`). See [Setting up Ollama](#setting-up-ollama).
+API keys and provider URLs therefore go **through the consumer's environment**, never hardcoded, never committed. The variables the LLM layer reads are **`OLLAMA_HOST`** (default `http://localhost:11434`), **`OLLAMA_MODEL`** (default `qwen2.5:0.5b`), **`GEMINI_API_KEY`** (no default; `GeminiLLMProvider` reads it at every `complete()` call, or the variable its `apiKeyVar` names) and **`GEMINI_MODEL`** (default `gemini-2.5-flash`). See [Setting up Ollama](#setting-up-ollama) and [Setting up Gemini](#setting-up-gemini).
 
 ---
 

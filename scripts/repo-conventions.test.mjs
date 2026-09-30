@@ -3,7 +3,9 @@
 // Ce fichier ne lit aucun fichier .env : seulement les .env.example versionnés.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 function readRepoFile(relativePath) {
   return readFileSync(new URL("../" + relativePath, import.meta.url), "utf8");
@@ -278,4 +280,98 @@ test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-ca
     existsSync(new URL("../src/metrics/application/use-cases/with-metrics.ts", import.meta.url)),
     "src/metrics/application/use-cases/with-metrics.ts introuvable",
   );
+});
+
+// Forme d'une clé d'API Google : aucun fichier versionné n'en porte une.
+const GOOGLE_KEY_SHAPE = /AIza[0-9A-Za-z_-]{35}/;
+
+test("TEST-3 (issue 26) le test d'intégration Gemini est ignoré sans GEMINI_INTEGRATION=1", () => {
+  const file = "tests/integration/gemini.integration.test.ts";
+  // Le fils n'a ni l'opt-in ni la clé : il ne peut pas appeler l'API. NODE_TEST_CONTEXT, posé par
+  // le lanceur de node --test, ferait sauter au node --test imbriqué l'exécution de ses fichiers.
+  // Les noms se comparent sans casse : sous Windows, process.env les ignore.
+  const scrubbed = ["GEMINI_INTEGRATION", "GEMINI_API_KEY", "NODE_TEST_CONTEXT"];
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !scrubbed.includes(name.toUpperCase())));
+  const child = spawnSync(process.execPath, ["--test", "--test-reporter=tap", file], {
+    cwd: fileURLToPath(new URL("../", import.meta.url)),
+    env,
+    encoding: "utf8",
+  });
+  assert.equal(child.status, 0, `node --test ${file} : code ${child.status}\n${child.stdout}${child.stderr}`);
+  assert.ok(
+    child.stdout.includes("# SKIP set GEMINI_INTEGRATION=1 with GEMINI_API_KEY in the environment"),
+    `${file} n'est pas ignoré par défaut\n${child.stdout}`,
+  );
+  assert.match(child.stdout, /^# fail 0$/m);
+  const source = readRepoFile(file);
+  for (const expected of ['process.env.GEMINI_INTEGRATION === "1"', "checkProviderContract"]) {
+    assert.ok(source.includes(expected), `${file} sans ${expected}`);
+  }
+  for (const forbidden of ["console.", "dotenv", "readFileSync", "GEMINI_API_KEY ="]) {
+    assert.ok(!source.includes(forbidden), `${file} contient ${forbidden}`);
+  }
+  assert.doesNotMatch(source, GOOGLE_KEY_SHAPE);
+});
+
+// Ce que la section Gemini du README et celle du guide disent toutes deux, mot pour mot.
+const GEMINI_DOC_EXPECTED = [
+  "`GEMINI_API_KEY`",
+  "`apiKeyVar`",
+  "`[redacted]`",
+  "`GEMINI_MODEL`",
+  "`gemini-2.5-flash`",
+  "`supportsStreaming()`",
+  "`https://generativelanguage.googleapis.com`",
+  "Do not pass `/v1beta`: the provider appends it.",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "H7",
+  "H8",
+  "Launching it is a manual step: no test suite and no agent loop runs it.",
+  "`GEMINI_INTEGRATION=1`",
+  "`checkProviderContract`",
+  "#20",
+  'npm run build; if ($LASTEXITCODE -eq 0) { try { $env:GEMINI_INTEGRATION = "1"; node --test tests/integration/gemini.integration.test.ts } finally { Remove-Item Env:GEMINI_INTEGRATION -ErrorAction SilentlyContinue } }',
+  "npm run build && GEMINI_INTEGRATION=1 node --test tests/integration/gemini.integration.test.ts",
+];
+
+test("TEST-4 (issue 26) le README documente Gemini et corrige ses lignes de surface", () => {
+  const readme = readRepoFile("README.md");
+  const section = sectionAfterHeading(readme, "## Setting up Gemini");
+  for (const text of GEMINI_DOC_EXPECTED) assert.ok(section.includes(text), `README : section Gemini sans ${text}`);
+  assert.ok(!section.includes(String.fromCharCode(0x2014)), "README : tiret cadratin dans la section Gemini");
+  const lines = splitLines(readme);
+  const llmEntry = lines.find((line) => line.startsWith("| `./llm` |")) ?? "";
+  assert.ok(llmEntry.includes("GeminiLLMProvider"), "README : ligne ./llm sans GeminiLLMProvider");
+  const engine = lines.find((line) => line.startsWith("- **Engine**:")) ?? "";
+  for (const name of ["GeminiLLMProvider", "GeminiConfig", "DEFAULT_GEMINI_MODEL"]) {
+    assert.ok(engine.includes(name), `README : puce Engine sans ${name}`);
+  }
+  const llmLayer = sectionAfterHeading(readme, "## Using the LLM layer (`./llm`)");
+  for (const text of ["GeminiLLMProvider", "PROVIDERS.gemini()"]) {
+    assert.ok(llmLayer.includes(text), `README : section ./llm sans ${text}`);
+  }
+  const configuration = sectionAfterHeading(readme, "## Configuration");
+  for (const text of ["`GEMINI_API_KEY`", "`GEMINI_MODEL`", "`apiKeyVar`", "(#setting-up-gemini)"]) {
+    assert.ok(configuration.includes(text), `README : section Configuration sans ${text}`);
+  }
+  assert.ok(!readme.includes("The variables the LLM layer reads today are"), "README : phrase des variables d'avant Gemini");
+  assert.doesNotMatch(readme, GOOGLE_KEY_SHAPE);
+});
+
+test("TEST-5 (issue 26) le guide documente Gemini et son test d'intégration", () => {
+  const guide = readRepoFile("docs/guide-agent-package.md");
+  const section = sectionAfterHeading(guide, "### Gemini provider and its integration test");
+  for (const text of [...GEMINI_DOC_EXPECTED, "tests/integration/gemini.integration.test.ts"]) {
+    assert.ok(section.includes(text), `guide : sous-section Gemini sans ${text}`);
+  }
+  assert.ok(!section.includes(String.fromCharCode(0x2014)), "guide : tiret cadratin dans la sous-section Gemini");
+  for (const file of ["gemini/gemini-llm-provider.ts", "gemini/gemini-wire.ts"]) {
+    assert.ok(guide.includes(file), `guide : arborescence sans ${file}`);
+  }
+  assert.doesNotMatch(guide, GOOGLE_KEY_SHAPE);
 });
