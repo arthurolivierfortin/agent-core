@@ -132,8 +132,10 @@ export class GeminiLLMProvider implements LLMProvider {
 }
 
 /**
- * The LLMError of a non-ok response. The message quotes Gemini's error.message when the body
- * carries one (H8), else the body text, always as a bounded excerpt and never the raw body (D2).
+ * The LLMError of a non-ok response. An error.message that is "" ends the message with
+ * (empty error message), an empty body with (empty body) (#32). The message quotes Gemini's
+ * error.message when the body carries one (H8), else the body text, always as a bounded excerpt
+ * and never the raw body (D2).
  * A 404 whose error.status is NOT_FOUND is MODEL_NOT_FOUND (H7); any other 404 points at baseURL (D8).
  * Every one carries the status of the response, and retryAfterMs when Retry-After is valid (#34).
  */
@@ -143,7 +145,9 @@ async function httpError(res: Response, url: string, model: string, apiKey: stri
   const text = await readBody(res, apiKey, http);
   const gemini = geminiErrorOf(text);
   const detail = gemini?.message ?? text;
-  const extract = detail === "" ? "(empty body)" : excerpt(redactKey(detail, apiKey));
+  // "" from error.message is not an empty body: the body carries an error object (#32).
+  const emptyLabel = gemini?.message === "" ? "(empty error message)" : "(empty body)";
+  const extract = detail === "" ? emptyLabel : excerpt(redactKey(detail, apiKey));
   const errorStatus = gemini?.status === undefined ? "" : " " + excerpt(redactKey(gemini.status, apiKey));
   const safeUrl = redactKey(url, apiKey);
   // Only Gemini's own NOT_FOUND names a missing model: a 404 from a wrong baseURL does not carry it.
