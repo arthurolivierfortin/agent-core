@@ -289,6 +289,27 @@ test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-ca
   );
 });
 
+test("TEST-1 (issue 23) ROADMAP : la carte de metrics/ liste exactement les fichiers .ts de src/metrics/", () => {
+  const lines = splitLines(readRepoFile("ROADMAP.md"));
+  const metrics = lines.indexOf("  metrics/");
+  const voice = lines.findIndex((line, index) => index > metrics && line.startsWith("  voice/"));
+  assert.ok(metrics !== -1 && voice !== -1, "ROADMAP.md : sous-arbres metrics/ puis voice/ introuvables");
+  const entries = lines.slice(metrics + 1, voice).map((line) => ({ line, path: line.trim().split(/\s+/)[0] }));
+  for (const { line, path } of entries) {
+    assert.ok(path.endsWith(".ts"), `ROADMAP.md : ligne du sous-arbre metrics/ sans chemin .ts en tête : « ${line} »`);
+  }
+  const files = readdirSync(new URL("../src/metrics/", import.meta.url), { recursive: true })
+    .map((name) => name.replaceAll("\\", "/"))
+    .filter((name) => name.endsWith(".ts"));
+  assert.deepEqual(
+    entries.map(({ path }) => path).sort(),
+    files.sort(),
+    "ROADMAP.md : la carte de metrics/ diffère des fichiers .ts de src/metrics/ (une ligne [Vn] future devra être exclue de la comparaison)",
+  );
+  const collector = entries.find(({ path }) => path === "application/use-cases/metrics-collector.ts");
+  assert.ok(collector?.line.includes("MetricsCollector"), "ROADMAP.md : ligne application/use-cases/metrics-collector.ts sans MetricsCollector");
+});
+
 // Délai du fils de TEST-3 (issue 26), qui dure environ 0,3 s : un fils bloqué fait échouer
 // ce test au lieu de figer la suite (#31).
 const CHILD_TIMEOUT_MS = 60_000;
@@ -447,4 +468,25 @@ test("TEST-10 (issue 42) docs/rapport-h2.md donne les commandes, les cinq gestes
   assert.doesNotMatch(doc, GOOGLE_KEY_SHAPE);
   const matrix = sectionAfterHeading(readRepoFile("README.md"), "## Evaluating agents over a matrix");
   assert.ok(matrix.includes("(docs/rapport-h2.md)"), "README : section de la matrice sans lien vers docs/rapport-h2.md");
+});
+
+// Phrase du TSDoc de MatrixRun.tokensUsed (#23) : la règle isTokenCount de withMetrics (#46).
+const TOKENS_USED_SENTENCE =
+  "Null as soon as one call reported no usage, or a usage counter that is not an integer >= 0" +
+  " (withMetrics, #46): absent is not zero (ADR-AGENT-0007).";
+
+test("TEST-2 (issue 23) le TSDoc de MatrixRun.tokensUsed couvre le compteur d'usage invalide de #46", () => {
+  const lines = splitLines(readRepoFile("src/agent/testing/run-matrix.ts"));
+  const start = lines.findIndex((line) => line.startsWith("export type MatrixRun<"));
+  assert.notEqual(start, -1, "run-matrix.ts : ligne « export type MatrixRun< » introuvable");
+  const end = lines.findIndex((line, index) => index > start && line === "};");
+  assert.notEqual(end, -1, "run-matrix.ts : fin « }; » de MatrixRun introuvable");
+  const field = lines.findIndex((line, index) => index > start && index < end && line === "  readonly tokensUsed: number | null;");
+  assert.notEqual(field, -1, "run-matrix.ts : ligne « readonly tokensUsed: number | null; » absente de MatrixRun");
+  assert.equal(lines[field - 1], "   */", "run-matrix.ts : la ligne qui précède tokensUsed n'est pas « */ »");
+  const open = lines.findLastIndex((line, index) => index < field && line === "  /**");
+  assert.ok(open > start, "run-matrix.ts : ligne « /** » du TSDoc de tokensUsed introuvable dans MatrixRun");
+  const block = lines.slice(open, field);
+  for (const line of block) assert.ok(line.length <= 100, `run-matrix.ts : ${line.length} colonnes : ${line}`);
+  assert.equal(block.slice(1, -1).map((line) => line.replace(/^ {3}\* /, "")).join(" "), TOKENS_USED_SENTENCE);
 });
