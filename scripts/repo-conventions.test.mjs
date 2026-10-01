@@ -401,3 +401,36 @@ test("TEST-10 (issue 35) l'en-tête Gemini porte la phrase de #34 en lignes de 1
   for (const line of block) assert.ok(line.length <= 100, `gemini-llm-provider.ts : ${line.length} colonnes : ${line}`);
   assert.equal(block.map((line) => line.replace(/^\/\/ /, "")).join(" "), HTTP_STATUS_SENTENCE);
 });
+
+test("TEST-9 (issue 42) .gitattributes garde les fins de ligne de docs/demo et de docs/reports", () => {
+  const lines = splitLines(readRepoFile(".gitattributes"));
+  for (const rule of ["docs/demo/** -text", "docs/reports/** -text"]) assert.ok(lines.includes(rule), `.gitattributes sans ${rule}`);
+});
+
+// Les quatre commandes de docs/rapport-h2.md (#42), chacune seule sur sa ligne.
+const H2_REPORT_COMMANDS = [
+  "npm run build; if ($LASTEXITCODE -eq 0) { node scripts/h2-report/cli.ts --cap-usd 1 --dry-run }",
+  "npm run build && node scripts/h2-report/cli.ts --cap-usd 1 --dry-run",
+  "npm run build; if ($LASTEXITCODE -eq 0) { node scripts/h2-report/cli.ts --cap-usd 1 }",
+  "npm run build && node scripts/h2-report/cli.ts --cap-usd 1",
+];
+
+test("TEST-10 (issue 42) docs/rapport-h2.md donne les commandes, les cinq gestes et la lecture de H2 à H4", () => {
+  const doc = readRepoFile("docs/rapport-h2.md");
+  const lines = splitLines(doc);
+  for (const command of H2_REPORT_COMMANDS) assert.ok(lines.includes(command), `rapport-h2 : commande absente : ${command}`);
+  assert.deepEqual(lines.filter((line) => line.startsWith("### ")), [
+    "### 1. Vérifier le tarif dans data/rates.json",
+    "### 2. Exposer GEMINI_API_KEY dans le shell",
+    "### 3. Répéter à blanc (--dry-run)",
+    "### 4. Lancer",
+    "### 5. Commiter le CSV, qui ferme #3",
+  ]);
+  for (const text of ["GEMINI_API_KEY", "data/rates.json", "TRUNCATED.txt", "<repo>", "<home>", "Closes #3", "H2", "H3", "H4"]) {
+    assert.ok(doc.includes(text), `rapport-h2 : ${text} absent`);
+  }
+  assert.ok(!doc.includes(String.fromCharCode(0x2014)), "rapport-h2 : tiret cadratin");
+  assert.doesNotMatch(doc, GOOGLE_KEY_SHAPE);
+  const matrix = sectionAfterHeading(readRepoFile("README.md"), "## Evaluating agents over a matrix");
+  assert.ok(matrix.includes("(docs/rapport-h2.md)"), "README : section de la matrice sans lien vers docs/rapport-h2.md");
+});
