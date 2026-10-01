@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LLMError } from "../../dist/index.js";
-import type { LLMProvider, LLMResponse, Message, ModelInfo, RateTable } from "../../dist/index.js";
+import type { LLMProvider, LLMResponse, Message, ModelInfo, RateTable, Usage } from "../../dist/index.js";
 import { capGuard } from "./cap-guard.ts";
 import type { CutReason } from "./cap-guard.ts";
 
@@ -297,3 +297,65 @@ test("TEST-5 (issue 39) the checks run in the order cut, cap, rate", async () =>
     },
   );
 });
+
+// Issue 41 (docs/specs/2026-09-30-cap-guard-usage-counters-design.md): each usage counter must be an
+// integer >= 0, else the cost is unknown, even when the other counter makes it look finite.
+const INVALID_COUNTERS: ReadonlyArray<readonly [string, Usage]> = [
+  ["a negative tokensIn offset by tokensOut", { tokensIn: -1, tokensOut: 1_000_000 }],
+  ["a negative tokensOut offset by tokensIn", { tokensIn: 1_000_000, tokensOut: -1 }],
+  ["a fractional tokensIn", { tokensIn: 0.5, tokensOut: 125_000 }],
+  ["a numeric string tokensOut", { tokensIn: 250_000, tokensOut: "125000" as unknown as number }],
+];
+
+for (const [title, usage] of INVALID_COUNTERS) {
+  test(`TEST-1 (issue 41) ${title} is returned, then cuts the matrix (unclassified) outside spentUsd`, async () => {
+    const response: LLMResponse = { content: title, toolCalls: [], usage };
+    const double = scripted([PRICED, { response }]);
+    const guard = capGuard(double.provider, RATES, 10);
+    await guard.complete(HI, OPTS);
+    assert.equal(await guard.complete(HI, OPTS), response);
+    assert.deepEqual([guard.cutReason(), guard.spentUsd(), guard.refused()], ["unclassified", 0.5, 0]);
+    await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unclassified") });
+    assert.equal(double.count(), 2);
+    assert.equal(guard.refused(), 1);
+  });
+}
+
+test("TEST-1 (issue 41) two counters of 1e308 overflow the cost to Infinity, which cuts the matrix", async () => {
+  // Locks the cost check of issue 39: valid counters can still overflow, which isCount does not cover.
+  const huge: LLMResponse = { content: "huge", toolCalls: [], usage: { tokensIn: 1e308, tokensOut: 1e308 } };
+  const double = scripted([PRICED, { response: huge }]);
+  const guard = capGuard(double.provider, RATES, 10);
+  await guard.complete(HI, OPTS);
+  assert.equal(await guard.complete(HI, OPTS), huge);
+  assert.deepEqual([guard.cutReason(), guard.spentUsd(), guard.refused()], ["unclassified", 0.5, 0]);
+  await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unclassified") });
+  assert.equal(double.count(), 2);
+  assert.equal(guard.refused(), 1);
+});
+
+// Issue 41: a resolved response that cannot be read rejects the call with the same error, and cuts
+// the matrix (unclassified) whatever that error is; classifyCut is for rejected calls only.
+const USAGE_ERROR = new LLMError("API_ERROR", "unreadable usage", { status: 429 });
+const UNREADABLE_RESPONSES: ReadonlyArray<readonly [string, LLMResponse, object]> = [
+  ["an undefined response", undefined as unknown as LLMResponse, { name: "TypeError" }],
+  ["a null response", null as unknown as LLMResponse, { name: "TypeError" }],
+  [
+    "a usage accessor throwing an LLMError of status 429",
+    { content: "getter", toolCalls: [], get usage(): Usage { throw USAGE_ERROR; } },
+    (thrown: unknown) => thrown === USAGE_ERROR,
+  ],
+];
+
+for (const [title, response, rejection] of UNREADABLE_RESPONSES) {
+  test(`TEST-2 (issue 41) ${title} rejects the call, then cuts the matrix (unclassified)`, async () => {
+    const double = scripted([PRICED, { response }]);
+    const guard = capGuard(double.provider, RATES, 10);
+    await guard.complete(HI, OPTS);
+    await assert.rejects(guard.complete(HI, OPTS), rejection);
+    assert.deepEqual([guard.cutReason(), guard.spentUsd(), guard.refused()], ["unclassified", 0.5, 0]);
+    await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unclassified") });
+    assert.equal(double.count(), 2);
+    assert.equal(guard.refused(), 1);
+  });
+}
