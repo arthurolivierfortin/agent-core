@@ -15,8 +15,26 @@ Spécification : docs/specs/2026-09-30-cap-guard-usage-counters-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] **R-1** (spécification) · Le total du rapport n'est pas protégé : `withMetrics` (`src/metrics/application/use-cases/with-metrics.ts:45-50`), au-dessus du garde, enregistre les compteurs tels quels, et `aggregate` les tarifie sans contrôle ; le run dont la réponse porte un compteur invalide garde dans `runs.truncated.csv` un coût sous-estimé ou converti. Le rapport est alors tronqué (`cut: unclassified`), ce qui signale l'anomalie ; le plafond, lui, est étanche. Hors périmètre (`src/` exclu) ; à rouvrir en issue si le pilote veut un total qui refuse ces compteurs.
+- [H] **R-2** (spécification) · Branche `cost < 0` inatteignable après SPEC-1 : compteurs ≥ 0 et tarifs > 0 finis ne donnent jamais un coût négatif. Conservée comme défense (D3), sans test possible par l'interface publique ; une mutation qui la retire ne fait échouer aucun test.
+- [H] **R-3** (spécification) · `toUsage` de Gemini et d'Ollama restent contrôlés par `typeof` seul : une réponse à compteur négatif ou fractionnaire, si elle existait, est désormais coupée par le garde ; aucune réponse Gemini connue n'en porte.
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de la tâche 1 (spécification ; précédent P1 de #20, #35, #39).
+- [H] **P2** · Noms et découpage des tests choisis par ce plan : TEST-1 en cinq `test()` (quatre lignes de `INVALID_COUNTERS`, un pour `1e308`), TEST-2 en trois (`UNREADABLE_RESPONSES`) : huit tests ajoutés (B → B + 8). Titres en anglais comme leurs voisins, préfixés `TEST-N (issue 41)`, sans `#`. L'erreur de l'accesseur est la constante de module `USAGE_ERROR` (la spécification la nomme `error`, nom déjà pris par des `const error` locaux de tests voisins) ; la colonne d'attente de `UNREADABLE_RESPONSES` est typée `object` (accepté par `assert.rejects`).
+- [H] **P3** · `Usage` entre dans l'import de types dès la tâche 1, où `INVALID_COUNTERS` l'utilise ; la tâche 2 l'utilise aussi (type de l'accesseur).
+- [H] **P4** · TEST-1 (b) est vert à l'écriture (comportement de #39) : sa pertinence est prouvée par la mutation 1.6 après le commit de SPEC-1, sa preuve figure au rapport et à la PR, pas dans le corps du commit (déjà fait). Même règle pour la mutation 2.6 de D4. Mutations annulées par `git restore scripts/h2-report/cap-guard.ts`, preuve par `git diff --stat` vide.
+- [H] **P5** · Le rouge de TEST-2 échoue sur le `deepEqual` (coupure absente), après un rejet déjà conforme ; l'admission du troisième appel (3 appels au double), citée par la spécification, est déduite du code (aucune coupure posée), pas montrée par la sortie, qui s'arrête au premier échec.
+- [H] **P6** · Textes choisis par ce plan : TSDoc de `capGuard` (éditions 1.3b et 2.3a), commentaire du second `try` (2.3b) ; ceux de `isCount` et `usageCounters` sont ceux de la spécification.
+- [H] **P7** · Longueurs : des lignes ajoutées dépassent 100 colonnes (au plus 122 : la ligne `const cost = …` prescrite par la spécification ; 104 et 106 pour les TSDoc d'une ligne de `isCount` et `usageCounters` ; 101 à 116 dans les tests) ; le dépôt n'a ni formateur ni linter, et les deux fichiers en ont déjà (l.8 de `cap-guard.ts` : 106 ; l.19 de `cap-guard.test.ts` : 120).
+- [H] **P8** · Sorties observées par le planificateur sur une sonde (`dist/` et `node_modules/` du worktree `feat+42-h2-report-launch`, arbre identique), pas sur un build frais de ce worktree ; référence B = 365 déduite du plan de #42. Un écart de totaux à la tâche 0 se traite comme dit en 0.3.
+- [H] **Node** · Node local ≥ 22.18 (retrait de types sans drapeau), constaté v22.19.0.
+- [H] **Risque · `dist/` absent ou périmé** (plan) : les tests importent le paquet depuis `dist/` ; `npm run test` rebuild à chaque lancement, un `node --test` lancé seul sans `npm run build` après `npm ci` échouerait à l'import.
+- [H] **Risque · Mutation oubliée** (plan) : une mutation non annulée partirait dans le commit suivant ; le contrôle `git diff --stat -- scripts/h2-report/cap-guard.ts` vide après chaque mutation, `git status --short` vide avant la tâche suivante, et les contrôles 5 et 6 de la tâche 3 l'interdisent.
+- [H] **Risque · Ordre des éditions de la tâche 2** (plan) : 2.3a et 2.3b remplacent des lignes écrites en 1.3b et 1.3c ; elles ne s'appliquent que sur le commit de la tâche 1.
+- [H] **Risque · Référence déduite** (plan) : B = 365 vient du plan de #42, non d'une exécution ; si elle diffère, seuls les totaux se décalent, les nombres d'échecs et les titres restent ceux de ce plan.
+- [H] **Risque · R-1, R-3** (plan) : défauts résiduels déclarés, hors périmètre, à reprendre en issue si le pilote le décide.
+- [H] **Référence observée par le builder** · `npm run test` sur 76d02c1 après `npm ci` donne `# tests 367`, `# pass 365`, `# skipped 2` (B = 367, non 365 comme déduit en P8) : tous les totaux du plan sont décalés de +2 (rouge 1.2 : 372/366/4 ; vert : 372/370 ; mutation 1.6 : 372/369/1 ; rouge 2.2 : 375/370/3 ; vert et GATE-3 : 375/373/0 ; mutation 2.6 : 375/372/1), les nombres d'échecs et les titres sont ceux du plan.
