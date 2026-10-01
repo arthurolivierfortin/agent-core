@@ -44,7 +44,8 @@ test("TEST-8 (issue 42) cli.ts reads the rates under its own root and passes pro
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "GEMINI_API_KEY"));
   const launches: Array<[NodeJS.ProcessEnv, boolean]> = [[env, true], [{ ...env, GEMINI_API_KEY: SENTINEL }, false]];
   for (const [childEnv, unset] of launches) {
-    const child = spawnSync(process.execPath, [cli, "--cap-usd", "1", "--dry-run"], { cwd: tmpdir(), env: childEnv, encoding: "utf8" });
+    const child = spawnSync(process.execPath, [cli, "--cap-usd", "1", "--dry-run"], { cwd: tmpdir(), env: childEnv, encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
+    assertNotTimedOut(child, "node scripts/h2-report/cli.ts --cap-usd 1 --dry-run");
     assert.ok(!child.stderr.includes("ENOENT"), child.stderr);
     assert.ok(!(child.stdout + child.stderr).includes(SENTINEL), "the sentinel key was written");
     assert.equal(child.stderr.includes("environment variable GEMINI_API_KEY is unset or empty"), unset, child.stderr);
