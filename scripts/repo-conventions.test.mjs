@@ -401,3 +401,8 @@ test("TEST-10 (issue 35) l'en-tête Gemini porte la phrase de #34 en lignes de 1
   for (const line of block) assert.ok(line.length <= 100, `gemini-llm-provider.ts : ${line.length} colonnes : ${line}`);
   assert.equal(block.map((line) => line.replace(/^\/\/ /, "")).join(" "), HTTP_STATUS_SENTENCE);
 });
+
+test("TEST-9 (issue 42) .gitattributes garde les fins de ligne de docs/demo et de docs/reports", () => {
+  const lines = splitLines(readRepoFile(".gitattributes"));
+  for (const rule of ["docs/demo/** -text", "docs/reports/** -text"]) assert.ok(lines.includes(rule), `.gitattributes sans ${rule}`);
+});

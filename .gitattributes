@@ -1,2 +1,4 @@
 # The demo files are compared byte for byte (CRLF in the CSV, LF in the JSON): no line-ending conversion.
 docs/demo/** -text
+# The H2 report files are committed as written (CRLF in the CSV): no line-ending conversion.
+docs/reports/** -text
