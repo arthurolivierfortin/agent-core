@@ -18,7 +18,7 @@
 
 import { LLMError } from "../../models/index.js";
 import type { LLMResponse, Message, ToolCall, ToolDefinition, Usage } from "../../models/index.js";
-import { isTokenCount } from "../token-count.js";
+import { isTokenCount } from "../../services/token-count.js";
 
 export type GeminiFunctionCall = { id?: string; name: string; args?: Record<string, unknown> };
 export type GeminiFunctionResponse = { name: string; response: { content: string } };

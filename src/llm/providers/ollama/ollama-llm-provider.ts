@@ -9,7 +9,7 @@ import type {
   LLMChunk,
   Usage,
 } from "../../models/index.js";
-import { isTokenCount } from "../token-count.js";
+import { isTokenCount } from "../../services/token-count.js";
 
 /** The injectable fetch contract: the real global fetch in prod, a fake in tests, the seam that keeps the adapter testable offline. */
 type FetchLike = typeof fetch;

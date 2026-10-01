@@ -15,7 +15,7 @@
   commentaire est l'estimation postée par `estimator`. La réserve R-3 de la spécification est
   levée (voir « Hypothèses », P10).
 - Conception appliquée : celle de la spécification, sans écart de comportement. Production :
-  `src/llm/providers/token-count.ts` (nouveau, `isTokenCount` exporté du module, absent de tout
+  `src/llm/services/token-count.ts` (nouveau, `isTokenCount` exporté du module, absent de tout
   barrel) ; `src/llm/providers/gemini/gemini-wire.ts` (import, `toUsage` et son TSDoc) ;
   `src/llm/providers/ollama/ollama-llm-provider.ts` (import, `toUsage` et un TSDoc) ;
   `src/llm/models/index.ts` (TSDoc de `Usage` seulement). Tests ajoutés en fin de fichier dans
@@ -68,7 +68,7 @@
 
 | Fichier | Ajoutées | Retirées |
 |---|---|---|
-| `src/llm/providers/token-count.ts` (nouveau) | 10 | 0 |
+| `src/llm/services/token-count.ts` (nouveau) | 10 | 0 |
 | `src/llm/providers/gemini/gemini-wire.ts` | 12 | 6 |
 | `src/llm/providers/ollama/ollama-llm-provider.ts` | 10 | 4 |
 | `src/llm/models/index.ts` | 5 | 1 |
@@ -163,7 +163,7 @@ Aucun `[DB-N]`.
     `isTokenCount` absent des deux ; `diff` des `.d.ts` : `dist/index.d.ts`, `dist/llm/index.d.ts`,
     `dist/llm/providers/index.d.ts` identiques, `dist/llm/models/index.d.ts` ne diffère que par le
     TSDoc de `Usage` ; `grep -rn isTokenCount dist --include=*.d.ts` → la seule ligne
-    `dist/llm/providers/token-count.d.ts:5:export declare function isTokenCount(value: unknown): value is number;`.
+    `dist/llm/services/token-count.d.ts:5:export declare function isTokenCount(value: unknown): value is number;`.
 - Hors sonde, sur le `dist/` de `main` : le scénario de TEST-3 rejoué en `node -e` rend
   `completed -1 je conclus ici 3` (compteurs `5` / `-20`) et `completed NaN je conclus ici 3`
   (`1e400` / `-1e400`) ; avec un `usage` invalide écarté, `budget 14 je conclus ici 3` les deux
@@ -309,7 +309,7 @@ erreur de compilation (le build passe, `npm run build` en tête de la sortie san
 
 ### 1.3 Écrire SPEC-1
 
-Nouveau fichier `src/llm/providers/token-count.ts` (outil Write), exactement :
+Nouveau fichier `src/llm/services/token-count.ts` (outil Write), exactement :
 
 ```ts
 // #51: the rule every usage counter obeys before it leaves a provider adapter, the one capGuard
@@ -334,7 +334,7 @@ par :
 
 ```ts
 import type { LLMResponse, Message, ToolCall, ToolDefinition, Usage } from "../../models/index.js";
-import { isTokenCount } from "../token-count.js";
+import { isTokenCount } from "../../services/token-count.js";
 ```
 
 Édition 1.3b · `src/llm/providers/gemini/gemini-wire.ts` · remplacer :
@@ -396,7 +396,7 @@ Cocher `[SPEC-1]` et `[TEST-1]` dans `docs/specs/2026-10-01-budget-usage-invalid
 commit (spécification, « Ordre des commits et preuve de rouge » ; précédent P1 de #20, #35, #39,
 #41, #46).
 
-`git add src/llm/providers/token-count.ts src/llm/providers/gemini/gemini-wire.ts tests/llm/providers/gemini/gemini-wire.test.ts docs/specs/2026-10-01-budget-usage-invalide-checklist.md docs/specs/2026-10-01-budget-usage-invalide-design.md docs/plans/2026-10-01-budget-usage-invalide-estimate.json docs/plans/2026-10-01-budget-usage-invalide-plan.md`
+`git add src/llm/services/token-count.ts src/llm/providers/gemini/gemini-wire.ts tests/llm/providers/gemini/gemini-wire.test.ts docs/specs/2026-10-01-budget-usage-invalide-checklist.md docs/specs/2026-10-01-budget-usage-invalide-design.md docs/plans/2026-10-01-budget-usage-invalide-estimate.json docs/plans/2026-10-01-budget-usage-invalide-plan.md`
 (ajouter `docs/plans/2026-10-01-budget-usage-invalide-plan-v2.md` s'il existe) → sortie attendue :
 vide ou des avertissements `LF will be replaced by CRLF`, rien d'autre.
 
@@ -411,7 +411,7 @@ promptTokenCount ou candidatesTokenCount n'est pas un entier >= 0,
 que thoughtsTokenCount présent ne l'est pas, ou que la somme de sortie
 ne l'est pas (1e308 + 1e308 donne Infinity). Chaque compteur est lu
 une fois. La règle, isTokenCount, est écrite une fois dans
-src/llm/providers/token-count.ts, importée en relatif et absente de
+src/llm/services/token-count.ts, importée en relatif et absente de
 tout barrel : aucun symbole public ajouté. Le budget maxTokens ne
 reçoit plus de compteur négatif, fractionnaire, NaN ou infini venu de
 Gemini.
@@ -648,7 +648,7 @@ par :
 ```ts
   Usage,
 } from "../../models/index.js";
-import { isTokenCount } from "../token-count.js";
+import { isTokenCount } from "../../services/token-count.js";
 ```
 
 Édition 2.3b · `src/llm/providers/ollama/ollama-llm-provider.ts` · remplacer :
@@ -727,7 +727,7 @@ Le type lui-même (`tokensIn: number; tokensOut: number;`) ne change pas.
    code 0.
 6. `diff <dossier_tmp>/agent-core-issue51-before-index.d.ts dist/index.d.ts` → sortie vide, code 0.
 7. `grep -rn isTokenCount dist --include=*.d.ts` → une seule ligne :
-   `dist/llm/providers/token-count.d.ts:5:export declare function isTokenCount(value: unknown): value is number;`
+   `dist/llm/services/token-count.d.ts:5:export declare function isTokenCount(value: unknown): value is number;`
    (module non servi par `exports` de `package.json`, seulement `.`, `./llm`, `./tools`,
    `./testing`).
 8. `node -e "import('./dist/llm/index.js').then((m) => console.log(Object.keys(m).sort().join(',')))"`
@@ -757,7 +757,7 @@ fix(llm): rendre l'usage Ollama absent si un compteur est invalide
 
 toUsage d'ollama-llm-provider.ts rend usage undefined dès que
 prompt_eval_count ou eval_count n'est pas un entier >= 0 (isTokenCount
-de src/llm/providers/token-count.ts), pour complete comme pour le
+de src/llm/services/token-count.ts), pour complete comme pour le
 fragment terminal de stream. JSON lit 1e400 en Infinity : un corps
 portant 1e400 et -1e400 rendait tokensUsed NaN et le budget maxTokens
 inopérant ; un compteur négatif retardait l'arrêt. tokensOf ignorait
@@ -785,7 +785,7 @@ Authorship: ai
 
 `git status --short` → sortie attendue : vide (arbre propre).
 
-**Mutation 1** · `src/llm/providers/token-count.ts` · outil Edit, remplacer :
+**Mutation 1** · `src/llm/services/token-count.ts` · outil Edit, remplacer :
 
 ```ts
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
@@ -804,8 +804,8 @@ par :
    not ok … - TEST-1 (issue 51) three zero counters are a usage of zero, not an invalid one
    not ok … - TEST-2 (issue 51) complete() keeps two zero counters as a usage of zero
    ```
-2. `git restore src/llm/providers/token-count.ts` → sortie vide.
-3. `git diff --stat -- src/llm/providers/token-count.ts` → sortie attendue : **vide**.
+2. `git restore src/llm/services/token-count.ts` → sortie vide.
+3. `git diff --stat -- src/llm/services/token-count.ts` → sortie attendue : **vide**.
 
 **Mutation 2** · `src/llm/providers/gemini/gemini-wire.ts` · outil Edit, remplacer :
 
@@ -883,7 +883,7 @@ relatifs au dépôt dans toute preuve :
    src/llm/models/index.ts
    src/llm/providers/gemini/gemini-wire.ts
    src/llm/providers/ollama/ollama-llm-provider.ts
-   src/llm/providers/token-count.ts
+   src/llm/services/token-count.ts
    tests/agent/application/use-cases/step.test.ts
    tests/llm/providers/gemini/gemini-wire.test.ts
    tests/llm/providers/ollama/ollama-adapter.test.ts
@@ -893,14 +893,14 @@ relatifs au dépôt dans toute preuve :
    → sortie attendue : **vide** (ni `step.ts`, ni `withMetrics`, ni `capGuard`, ni barrel, ni
    `FakeLLMProvider`, ni `package.json`).
 5. `git diff --name-only -G export origin/main...HEAD -- src` → sortie attendue, exactement :
-   `src/llm/providers/token-count.ts` (le seul `export` ajouté est celui du module interne, hors
+   `src/llm/services/token-count.ts` (le seul `export` ajouté est celui du module interne, hors
    barrel).
 6. `git diff --numstat origin/main...HEAD -- src tests` → sortie attendue, exactement :
    ```
    5	1	src/llm/models/index.ts
    12	6	src/llm/providers/gemini/gemini-wire.ts
    10	4	src/llm/providers/ollama/ollama-llm-provider.ts
-   10	0	src/llm/providers/token-count.ts
+   10	0	src/llm/services/token-count.ts
    63	1	tests/agent/application/use-cases/step.test.ts
    29	0	tests/llm/providers/gemini/gemini-wire.test.ts
    51	0	tests/llm/providers/ollama/ollama-adapter.test.ts
@@ -910,19 +910,19 @@ relatifs au dépôt dans toute preuve :
    src/llm/models/index.ts:41: * counter that is not (#51).
    src/llm/providers/gemini/gemini-wire.ts:182: * integer >= 0 (isTokenCount, #51), else usage stays undefined: a negative, fractional, NaN or
    src/llm/providers/ollama/ollama-llm-provider.ts:202: * Both counters of a final chunk, each an integer >= 0 (isTokenCount, #51), else undefined: absent
-   src/llm/providers/token-count.ts:1:// #51: the rule every usage counter obeys before it leaves a provider adapter, the one capGuard
+   src/llm/services/token-count.ts:1:// #51: the rule every usage counter obeys before it leaves a provider adapter, the one capGuard
    ```
 8. `git grep -n "isTokenCount" -- src/llm` → sortie attendue, exactement :
    ```
-   src/llm/providers/gemini/gemini-wire.ts:21:import { isTokenCount } from "../token-count.js";
+   src/llm/providers/gemini/gemini-wire.ts:21:import { isTokenCount } from "../../services/token-count.js";
    src/llm/providers/gemini/gemini-wire.ts:182: * integer >= 0 (isTokenCount, #51), else usage stays undefined: a negative, fractional, NaN or
    src/llm/providers/gemini/gemini-wire.ts:191:  if (!isTokenCount(tokensIn) || !isTokenCount(candidateTokens)) return undefined;
    src/llm/providers/gemini/gemini-wire.ts:192:  if (thoughts !== undefined && !isTokenCount(thoughts)) return undefined;
    src/llm/providers/gemini/gemini-wire.ts:195:  if (!isTokenCount(tokensOut)) return undefined;
-   src/llm/providers/ollama/ollama-llm-provider.ts:12:import { isTokenCount } from "../token-count.js";
+   src/llm/providers/ollama/ollama-llm-provider.ts:12:import { isTokenCount } from "../../services/token-count.js";
    src/llm/providers/ollama/ollama-llm-provider.ts:202: * Both counters of a final chunk, each an integer >= 0 (isTokenCount, #51), else undefined: absent
    src/llm/providers/ollama/ollama-llm-provider.ts:209:  if (!isTokenCount(tokensIn) || !isTokenCount(tokensOut)) return undefined;
-   src/llm/providers/token-count.ts:8:export function isTokenCount(value: unknown): value is number {
+   src/llm/services/token-count.ts:8:export function isTokenCount(value: unknown): value is number {
    ```
 9. `git grep -n "console\.log" -- src` → sortie attendue : vide.
 10. `git grep -n -E "AIza[0-9A-Za-z_-]{35}" -- scripts src tests` → sortie attendue : vide.
@@ -962,7 +962,7 @@ porte obligatoirement :
 - Les contrôles 2 à 13 avec leur résultat, et les contrôles d'API de 2.4 (3 à 10) : `.d.ts` de
   `dist/index.d.ts`, `dist/llm/index.d.ts` et `dist/llm/providers/index.d.ts` identiques,
   `dist/llm/models/index.d.ts` différant par le TSDoc de `Usage` seul, `isTokenCount` présent dans
-  le seul `dist/llm/providers/token-count.d.ts` (non servi par `exports`), clés du barrel `./llm`
+  le seul `dist/llm/services/token-count.d.ts` (non servi par `exports`), clés du barrel `./llm`
   et nombre de clés de `.` inchangés.
 - Le rouge de 1.2 (8 des 9 TEST-1) et de 2.2 (6 des 7 TEST-2, 2 des 2 TEST-3, `completed` au lieu
   de `budget`, `tokensUsed` `-1` puis `NaN`), et la preuve par mutation de 2.6 (`value > 0` : 3
@@ -985,7 +985,7 @@ toUsage de Gemini et d'Ollama rend usage absent quand un compteur
 n'est pas un entier fini >= 0 (négatif, fractionnaire, NaN, infini),
 et Gemini contrôle aussi la somme de sortie. La règle est celle de
 capGuard (#41) et de withMetrics (#46), écrite une fois pour les deux
-adaptateurs dans src/llm/providers/token-count.ts, hors barrel.
+adaptateurs dans src/llm/services/token-count.ts, hors barrel.
 
 tokensOf ignorait déjà un usage absent : le budget maxTokens ne reçoit
 plus de NaN qui le rendait inopérant, ni de négatif qui retardait
@@ -1020,7 +1020,7 @@ Relire le fichier (outil Read) dans l'appel qui précède immédiatement toute c
   d'un `LLMProvider` écrit par un consommateur ou d'un `FakeLLMProvider` scripté ; un `NaN` ou un
   négatif y garde l'effet décrit par l'issue. Hors périmètre par l'attendu (D3) ; à rouvrir en
   issue si le pilote veut un budget qui refuse lui-même un usage invalide.
-- **R-2** (spécification) · Trois copies de la règle (D2) : `src/llm/providers/token-count.ts`
+- **R-2** (spécification) · Trois copies de la règle (D2) : `src/llm/services/token-count.ts`
   (#51), `src/metrics/application/use-cases/with-metrics.ts:54-57` (#46),
   `scripts/h2-report/cap-guard.ts:39-42` (#41), identiques mot pour mot et verrouillées chacune
   par ses tests ; un changement de la règle devra toucher les trois fichiers.
@@ -1065,9 +1065,10 @@ Relire le fichier (outil Read) dans l'appel qui précède immédiatement toute c
 
 - **Placement de `token-count.ts`** : la règle de placement du guide (`docs/guide-agent-package.md`,
   « `services/` is reserved for what invokes no port at all ») ferait d'une fonction pure un
-  candidat à `src/llm/services/` ; la spécification (D2) la place dans `src/llm/providers/`, à côté
-  de `gemini-wire.ts`, autre module pur interne aux adaptateurs. Le plan suit la spécification ; si
-  le juge le relève, c'est un déplacement d'un fichier et de deux imports.
+  candidat à `src/llm/services/` ; la première version de la spécification (D2) la plaçait dans
+  `src/llm/providers/`, à côté de `gemini-wire.ts`. Le juge l'a relevé à la revue de la PR #59 :
+  le module est déplacé dans `src/llm/services/token-count.ts` (un fichier, deux imports), et la
+  spécification (D2), la checklist et ce plan sont mis à jour en conséquence.
 - **Copies des `.d.ts` de `main`** : elles doivent être faites en 0.3, avant l'édition 1.3 ;
   faites après un build de la branche, les `diff` de 2.4 seraient vides et ne prouveraient rien.
 - **Mutation oubliée** : une mutation non annulée partirait dans le commit de la tâche 3 ; les

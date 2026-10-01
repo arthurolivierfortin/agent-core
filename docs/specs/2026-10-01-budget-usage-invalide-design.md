@@ -29,7 +29,7 @@ Contraintes du pilote : code du package publié (`src/`) ; le package ne lit que
 - `src/llm/models/index.ts:38-42` : `Usage = { tokensIn: number; tokensOut: number }`, TSDoc « Token count for a call. Absent (not zero) when the provider does not supply it. »
 - `src/agent/application/dtos/index.ts:41-42` (`Budget.maxTokens`, « A provider that reports none never trips it. ») et l.118-124 (`AgentResult.tokensUsed`, 0 quand le fournisseur ne rapporte rien) : restent vrais après #51.
 - Règle à reprendre : `scripts/h2-report/cap-guard.ts:39-42` (`isCount`) et `src/metrics/application/use-cases/with-metrics.ts:54-57` (`isTokenCount`), tous deux `typeof value === "number" && Number.isInteger(value) && value >= 0`, non exportés.
-- `src/llm/providers/index.ts` ne réexporte que `OllamaLLMProvider`, `OllamaConfig`, `GeminiLLMProvider`, `GeminiConfig`, `ProviderID`, `PROVIDERS`, `DEFAULT_*`, `resolveProvider` ; `package.json` n'expose que `.`, `./llm`, `./tools`, `./testing` : un module de `src/llm/providers/` importé en relatif et absent du barrel n'est pas public (précédent : `gemini-wire.ts`, « served by no barrel »).
+- `src/llm/providers/index.ts` ne réexporte que `OllamaLLMProvider`, `OllamaConfig`, `GeminiLLMProvider`, `GeminiConfig`, `ProviderID`, `PROVIDERS`, `DEFAULT_*`, `resolveProvider` ; `package.json` n'expose que `.`, `./llm`, `./tools`, `./testing` : un module de `src/llm/` importé en relatif et absent des barrels (`src/llm/index.ts` ne réexporte pas `services/`) n'est pas public (précédent : `gemini-wire.ts`, « served by no barrel »).
 - Tests existants : `tests/llm/providers/gemini/gemini-wire.test.ts:210-224` (« hypothesis H4 », dont `{ 0, 0 }` → `{ 0, 0 }` et compteur manquant → `undefined`) et l.226-235 (`TEST-2 (issue 39)`) ; `tests/llm/providers/ollama/ollama-adapter.test.ts:32-38` et l.80-90 (usage valide en `complete` et `stream`), helper `fakeFetch(body)` l.29-30 qui passe par `JSON.stringify` (un `NaN` ou `Infinity` y devient `null`) ; `tests/agent/application/use-cases/step.test.ts:448-467` (« the token bound lands the run once the provider has reported enough », `FakeLLMProvider`, `maxTokens: 10`), helpers `agentWith`, `navigateTool`, `wideContext`, `driveWithStep`, imports l.3-20 dont `LLMError` de `../../../../dist/llm/index.js` (l.12).
 - Effet en aval déjà fermé : `withMetrics` (#46) enregistre `{ null, null }` pour un usage absent comme pour un usage invalide ; `capGuard` (#41) coupe `unclassified` dans les deux cas (`usageCounters` rend `null`). #51 ne change donc ni les métriques ni le rapport H2.
 
@@ -37,7 +37,7 @@ Contraintes du pilote : code du package publié (`src/`) ; le package ne lit que
 
 Dans la PR :
 
-- `src/llm/providers/token-count.ts`, nouveau module interne (SPEC-1) ;
+- `src/llm/services/token-count.ts`, nouveau module interne (SPEC-1) ;
 - `src/llm/providers/gemini/gemini-wire.ts`, `toUsage` et son TSDoc (SPEC-1) ;
 - `src/llm/providers/ollama/ollama-llm-provider.ts`, `toUsage` et un TSDoc (SPEC-2) ;
 - `src/llm/models/index.ts`, TSDoc de `Usage` seulement (SPEC-2) ;
@@ -56,7 +56,7 @@ Hors périmètre :
 
 ### SPEC-1 · Module `token-count.ts` et `toUsage` de Gemini
 
-Nouveau fichier `src/llm/providers/token-count.ts`, importé en relatif par les deux adaptateurs, absent de `src/llm/providers/index.ts` :
+Nouveau fichier `src/llm/services/token-count.ts`, importé en relatif par les deux adaptateurs, absent de `src/llm/providers/index.ts` :
 
 ```ts
 // #51: the rule every usage counter obeys before it leaves a provider adapter, the one capGuard
@@ -68,7 +68,7 @@ export function isTokenCount(value: unknown): value is number {
 }
 ```
 
-Dans `gemini-wire.ts`, import `import { isTokenCount } from "../token-count.js";` et `toUsage` devient :
+Dans `gemini-wire.ts`, import `import { isTokenCount } from "../../services/token-count.js";` et `toUsage` devient :
 
 ```ts
 function toUsage(metadata: GeminiResponse["usageMetadata"]): Usage | undefined {
@@ -87,7 +87,7 @@ Chaque compteur est lu une fois ; la somme est contrôlée aussi, parce que deux
 
 ### SPEC-2 · `toUsage` d'Ollama et TSDoc de `Usage`
 
-Dans `ollama-llm-provider.ts`, import `import { isTokenCount } from "../token-count.js";` et `toUsage` devient :
+Dans `ollama-llm-provider.ts`, import `import { isTokenCount } from "../../services/token-count.js";` et `toUsage` devient :
 
 ```ts
 /**
@@ -109,7 +109,7 @@ Le TSDoc de `Usage` (`src/llm/models/index.ts:38`) devient : « Token count for 
 
 ### Effet sur l'API publique
 
-- **Types exportés** : aucun changement de forme. `isTokenCount` n'entre dans aucun barrel ni dans `exports` de `package.json` ; `dist/llm/providers/token-count.js` existe mais n'est pas importable par un consommateur via le paquet.
+- **Types exportés** : aucun changement de forme. `isTokenCount` n'entre dans aucun barrel ni dans `exports` de `package.json` ; `dist/llm/services/token-count.js` existe mais n'est pas importable par un consommateur via le paquet.
 - **Sémantique** : une réponse Gemini ou Ollama dont un compteur n'est pas un entier fini ≥ 0 est servie normalement (contenu, appels d'outils), avec `usage` absent au lieu d'un usage faux. Conséquences :
   - `AgentState.tokensUsed` et `AgentResult.tokensUsed` n'ajoutent rien pour cet appel (règle existante de `tokensOf`) au lieu d'ajouter un négatif, une fraction, `Infinity` ou `NaN` ;
   - le budget `maxTokens` reste opérant : un appel invalide compte 0, il ne retire rien aux appels valides et ne rend plus la somme `NaN` ;
@@ -151,7 +151,7 @@ Aucune dépendance. (#46, origine de l'issue, est livrée : PR #50 fusionnée.)
 ## Décisions et alternatives écartées
 
 - **D1 · Usage entier absent** plutôt qu'un compteur à 0 ou qu'un usage partiel : `Usage` exige deux nombres, et compter 0 pour un compteur invalide inventerait une donnée (« absent is not zero », ADR-AGENT-0007). Un compteur valide accompagnant un invalide est perdu : l'usage d'une réponse dont un compteur est faux n'est pas digne de confiance pour l'autre (même choix que D1 de #46 et que `usageCounters` de #41).
-- **D2 · Un module interne partagé par les deux adaptateurs**, `src/llm/providers/token-count.ts`, plutôt qu'une copie privée par fichier : les deux adaptateurs sont dans le même sous-système et la règle y reste unique. `withMetrics` garde sa copie (le faire importer depuis `llm/providers/` serait un refactor hors de l'issue, et lierait `metrics` aux adaptateurs) ; `capGuard` garde la sienne (`scripts/` n'importe que `dist/index.js`, où la règle n'est pas exportée). Écarté : exporter `isTokenCount` dans un barrel, qui ajoute un symbole public (contrat semver, `tests/barrel-contract.test.ts`) pour une expression d'une ligne.
+- **D2 · Un module interne partagé par les deux adaptateurs**, `src/llm/services/token-count.ts`, plutôt qu'une copie privée par fichier : les deux adaptateurs sont dans le même sous-système et la règle y reste unique. Le module est dans `services/` et non dans `providers/` : c'est une fonction pure (ni disque, ni HTTP, ni SDK), que la règle de placement du dépôt range dans `services/` (`docs/decisions/ADR-AGENT-0001-hexagonal-architecture-use-cases-functions.md:61`, `docs/guide-agent-package.md:162`), `providers/` étant réservé aux adaptateurs par fournisseur (ADR-AGENT-0001:53 et 63, ADR-AGENT-0016:177) ; correction demandée par la revue de la PR #59. `withMetrics` garde sa copie (le faire importer depuis `llm/services/` serait un refactor hors de l'issue, et lierait `metrics` au sous-système `llm`) ; `capGuard` garde la sienne (`scripts/` n'importe que `dist/index.js`, où la règle n'est pas exportée). Écarté : exporter `isTokenCount` dans un barrel, qui ajoute un symbole public (contrat semver, `tests/barrel-contract.test.ts`) pour une expression d'une ligne.
 - **D3 · `tokensOf` inchangé** : l'attendu de l'issue lui demande d'ignorer un usage absent, ce qu'il fait déjà (step.ts:277, agentic-llm.test.ts:121-127). Écarté : lui faire aussi refuser un usage invalide, qui protégerait le budget contre un fournisseur tiers ou un `FakeLLMProvider` scripté, mais déborde l'attendu ; déclaré en R-1.
 - **D4 · Somme Gemini contrôlée** (`tokensOut`) en plus des trois compteurs : sans elle, `candidatesTokenCount` et `thoughtsTokenCount` valides mais énormes rendraient `tokensOut: Infinity`, et le budget tomberait sur un usage faux. Coût : une ligne.
 - **D5 · `-0` accepté**, comme D2 de #41 et D5 de #46 (`Number.isInteger(-0)` et `-0 >= 0` sont vrais) ; il compte 0.
@@ -198,7 +198,7 @@ toUsage de Gemini et d'Ollama rend usage absent quand un compteur
 n'est pas un entier fini >= 0 (négatif, fractionnaire, NaN, infini),
 et Gemini contrôle aussi la somme de sortie. La règle est celle de
 capGuard (#41) et de withMetrics (#46), écrite une fois pour les deux
-adaptateurs dans src/llm/providers/token-count.ts, hors barrel.
+adaptateurs dans src/llm/services/token-count.ts, hors barrel.
 
 tokensOf ignorait déjà un usage absent : le budget maxTokens ne reçoit
 plus de NaN qui le rendait inopérant, ni de négatif qui retardait
@@ -242,7 +242,7 @@ Hors `docs/` et `*.md`, lignes ajoutées et retirées :
 
 | Fichier | Estimation |
 |---|---|
-| `src/llm/providers/token-count.ts` (nouveau) | +7 |
+| `src/llm/services/token-count.ts` (nouveau) | +7 |
 | `src/llm/providers/gemini/gemini-wire.ts` (import, `toUsage`, TSDoc) | +9 −5 |
 | `src/llm/providers/ollama/ollama-llm-provider.ts` (import, `toUsage`, TSDoc) | +11 −4 |
 | `src/llm/models/index.ts` (TSDoc de `Usage`) | +2 −1 |
