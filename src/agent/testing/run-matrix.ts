@@ -47,7 +47,10 @@ export type MatrixRun<TState, TAxes extends Record<string, readonly unknown[]>> 
   /** The message of what the run threw, null when it threw nothing. */
   readonly error: string | null;
   readonly durationMs: number;
-  /** Null as soon as one call reported no usage: absent is not zero (ADR-AGENT-0007). */
+  /**
+   * Null as soon as one call reported no usage, or a usage counter that is not an integer >= 0
+   * (withMetrics, #46): absent is not zero (ADR-AGENT-0007).
+   */
   readonly tokensUsed: number | null;
   readonly costUsd: number | null;
   readonly trace: MatrixTrace<TState>;

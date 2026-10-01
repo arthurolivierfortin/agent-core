@@ -469,3 +469,24 @@ test("TEST-10 (issue 42) docs/rapport-h2.md donne les commandes, les cinq gestes
   const matrix = sectionAfterHeading(readRepoFile("README.md"), "## Evaluating agents over a matrix");
   assert.ok(matrix.includes("(docs/rapport-h2.md)"), "README : section de la matrice sans lien vers docs/rapport-h2.md");
 });
+
+// Phrase du TSDoc de MatrixRun.tokensUsed (#23) : la règle isTokenCount de withMetrics (#46).
+const TOKENS_USED_SENTENCE =
+  "Null as soon as one call reported no usage, or a usage counter that is not an integer >= 0" +
+  " (withMetrics, #46): absent is not zero (ADR-AGENT-0007).";
+
+test("TEST-2 (issue 23) le TSDoc de MatrixRun.tokensUsed couvre le compteur d'usage invalide de #46", () => {
+  const lines = splitLines(readRepoFile("src/agent/testing/run-matrix.ts"));
+  const start = lines.findIndex((line) => line.startsWith("export type MatrixRun<"));
+  assert.notEqual(start, -1, "run-matrix.ts : ligne « export type MatrixRun< » introuvable");
+  const end = lines.findIndex((line, index) => index > start && line === "};");
+  assert.notEqual(end, -1, "run-matrix.ts : fin « }; » de MatrixRun introuvable");
+  const field = lines.findIndex((line, index) => index > start && index < end && line === "  readonly tokensUsed: number | null;");
+  assert.notEqual(field, -1, "run-matrix.ts : ligne « readonly tokensUsed: number | null; » absente de MatrixRun");
+  assert.equal(lines[field - 1], "   */", "run-matrix.ts : la ligne qui précède tokensUsed n'est pas « */ »");
+  const open = lines.findLastIndex((line, index) => index < field && line === "  /**");
+  assert.ok(open > start, "run-matrix.ts : ligne « /** » du TSDoc de tokensUsed introuvable dans MatrixRun");
+  const block = lines.slice(open, field);
+  for (const line of block) assert.ok(line.length <= 100, `run-matrix.ts : ${line.length} colonnes : ${line}`);
+  assert.equal(block.slice(1, -1).map((line) => line.replace(/^ {3}\* /, "")).join(" "), TOKENS_USED_SENTENCE);
+});
