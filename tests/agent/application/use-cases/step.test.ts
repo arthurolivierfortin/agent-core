@@ -15,6 +15,7 @@ import type {
   LLMProvider,
   LLMResponse,
   Message,
+  Usage,
 } from "../../../../dist/llm/index.js";
 import type { Tool } from "../../../../dist/tools/index.js";
 import { FakeLLMProvider } from "../../../../dist/testing/index.js";
@@ -828,3 +829,68 @@ for (const [why, tokensIn, tokensOut] of INVALID_FIRST_COUNTS) {
     assert.equal(scripted.calls(), 3);
   });
 }
+
+/**
+ * #60: a first-call usage the loop must not add to its budget, and what is wrong with it. A
+ * provider written outside the package, or this scripted fake, hands it over as is: only the
+ * shipped adapters check their own usage (#51).
+ */
+const INVALID_USAGES: ReadonlyArray<readonly [string, Usage]> = [
+  ["a NaN tokensIn", { tokensIn: NaN, tokensOut: 5 }],
+  ["a negative tokensOut whose sum is a valid count", { tokensIn: 20, tokensOut: -15 }],
+  ["a negative tokensOut whose sum is negative", { tokensIn: 7, tokensOut: -20 }],
+  ["two fractional counters whose sum is a valid count", { tokensIn: 0.5, tokensOut: 4.5 }],
+  ["an infinite tokensOut", { tokensIn: 7, tokensOut: Infinity }],
+  ["a negatively infinite tokensOut", { tokensIn: 7, tokensOut: -Infinity }],
+  ["two valid counters whose sum overflows", { tokensIn: 1e308, tokensOut: 1e308 }],
+  ["a numeric string tokensIn", { tokensIn: "7", tokensOut: 5 } as unknown as Usage],
+];
+
+for (const [why, usage] of INVALID_USAGES) {
+  test(`TEST-1 (issue 60) the token bound still lands the run after ${why} from a scripted provider`, async () => {
+    const llm = new FakeLLMProvider({
+      responses: [
+        { ...callResponse("call-1", "navigate", { page: "reglages" }), usage },
+        { ...callResponse("call-2", "navigate", { page: "profil" }), usage: { tokensIn: 6, tokensOut: 6 } },
+        { ...textResponse("je conclus ici"), usage: { tokensIn: 1, tokensOut: 1 } },
+      ],
+    });
+    const deps: AgentDeps = {
+      agent: agentWith([navigateTool()]),
+      llm,
+      context: wideContext(),
+      budget: { maxTokens: 10 },
+    };
+
+    const state = await driveWithStep(deps, "amene-moi aux reglages");
+
+    // The invalid call adds nothing, 6 + 6 then reaches the bound, and the landing adds 1 + 1.
+    assert.equal(state.stopReason, "budget");
+    assert.equal(state.tokensUsed, 14);
+    assert.equal(state.lastContent, "je conclus ici");
+    assert.equal(llm.calls.length, 3);
+  });
+}
+
+test("TEST-1 (issue 60) an invalid usage on the landing call adds nothing to the token bound", async () => {
+  const llm = new FakeLLMProvider({
+    responses: [
+      { ...callResponse("call-1", "navigate", { page: "reglages" }), usage: { tokensIn: 6, tokensOut: 6 } },
+      { ...textResponse("je conclus ici"), usage: { tokensIn: NaN, tokensOut: 1 } },
+    ],
+  });
+  const deps: AgentDeps = {
+    agent: agentWith([navigateTool()]),
+    llm,
+    context: wideContext(),
+    budget: { maxTokens: 10 },
+  };
+
+  const state = await driveWithStep(deps, "amene-moi aux reglages");
+
+  // 6 + 6 reaches the bound, and the landing's NaN counter makes its whole usage add nothing.
+  assert.equal(state.stopReason, "budget");
+  assert.equal(state.tokensUsed, 12);
+  assert.equal(state.lastContent, "je conclus ici");
+  assert.equal(llm.calls.length, 2);
+});

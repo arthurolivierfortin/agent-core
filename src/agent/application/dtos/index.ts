@@ -38,7 +38,10 @@ export type Budget = {
   maxIterations?: number;
   /** Wall-clock bound, measured on the injected clock. Unset means no time bound. */
   maxDurationMs?: number;
-  /** Bound on the tokens the provider reported. A provider that reports none never trips it. */
+  /**
+   * Bound on the tokens the provider reported. A provider that reports none never trips it, and a
+   * call whose usage has a counter, or a sum, that is not an integer >= 0 counts as reporting none.
+   */
   maxTokens?: number;
   /**
    * How many times in a row the identical set of calls must repeat before the run counts as
@@ -94,7 +97,10 @@ export type AgentState = {
   iterations: number;
   /** Read from the injected clock when the run starts, so elapsed time is measurable. */
   startedAt: number;
-  /** Sum of the tokens the provider reported. Stays 0 against a provider that reports none. */
+  /**
+   * Sum of the tokens the provider reported. Stays 0 against a provider that reports none; a call
+   * whose usage has a counter, or a sum, that is not an integer >= 0 adds nothing.
+   */
   tokensUsed: number;
   /** The latest assistant text, which becomes the result's `content`. */
   lastContent: string;
@@ -118,8 +124,9 @@ export type AgentResult = {
   /**
    * Sum of the tokens (input + output) the provider reported over the whole run, the landing call
    * included. 0 when the provider reports none: this is the budget counter behind
-   * `Budget.maxTokens`, which cannot tell "absent" from zero. The metrics framework keeps that
-   * distinction (`UsageRecord`, `MetricsTotal`).
+   * `Budget.maxTokens`, which cannot tell "absent" from zero. A call whose usage has a counter, or
+   * a sum, that is not an integer >= 0 adds nothing, as if unreported. The metrics framework keeps
+   * that distinction (`UsageRecord`, `MetricsTotal`).
    */
   tokensUsed: number;
 };
