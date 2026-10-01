@@ -272,6 +272,8 @@ if (failed) {
 
 The package's own proof is versioned in [`docs/demo/h1-matrix/`](docs/demo/h1-matrix/): two fake models, five runs each, one priced and one not, its JSON report and both CSV files, checked byte for byte by the test suite.
 
+The first real comparison (milestone H2), a local model against Gemini under a dollar cap, is launched by `scripts/h2-report/cli.ts`: see [docs/rapport-h2.md](docs/rapport-h2.md) (in French).
+
 ---
 
 ## Using the LLM layer (`./llm`)
