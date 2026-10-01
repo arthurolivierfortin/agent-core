@@ -13,8 +13,23 @@ Spécification : docs/specs/2026-10-01-metrics-invalid-usage-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+- [H] R-1 (spécification) · `aggregate` et `MetricsCollector.record` appelés directement avec un enregistrement construit par le consommateur (`{ tokensIn: -1, … }`) valorisent encore ce compteur : le type le déclare `number | null` et le package n'y contrôle rien. Hors périmètre par l'attendu de l'issue (D3) ; à rouvrir en issue si le pilote veut un `aggregate` qui refuse ces compteurs.
+- [H] R-2 (spécification) · Budget `maxTokens` : `tokensOf` (`src/agent/application/use-cases/step.ts:276-279`) additionne les compteurs sans contrôle ; un compteur négatif retarde l'arrêt sur budget, un `NaN` le rend inopérant (`NaN >= maxTokens` est faux). Défaut distinct de la mesure, hors périmètre ; à ouvrir en issue.
+- [H] R-3 (spécification) · Réponse illisible : un fournisseur qui résout `undefined` ou `null`, ou dont l'accesseur `usage` lève, fait toujours rejeter `complete` sans enregistrement. Sous `capGuard`, celui-ci rejette déjà et coupe (#41) avant que `withMetrics` ne lise ; hors H2, le comportement reste celui de #11.
+- [H] R-4 (spécification) · `toUsage` de Gemini (`src/llm/providers/gemini/gemini-wire.ts:184-191`) et d'Ollama (`src/llm/providers/ollama/ollama-llm-provider.ts:200-205`) contrôlent par `typeof` seul : un compteur négatif ou fractionnaire, s'il arrivait, est désormais enregistré null par `withMetrics` et coupé par `capGuard` ; aucune réponse connue n'en porte.
+- [H] R-5 (spécification) · Dérive des deux copies de la règle (D2) : `isTokenCount` dans `src/`, `isCount` dans `scripts/h2-report/cap-guard.ts`, même définition mot pour mot ; bornée par les tests des deux côtés ; un changement de la règle devra toucher les deux fichiers.
+- [H] P1 · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de SPEC-1 (spécification ; précédent P1 de #20, #35, #39, #41), avec `README.md` et `docs/guide-agent-package.md` (contrainte du pilote : même commit que le code).
+- [H] P2 · TSDoc de `withMetrics` : le texte de la spécification est repris mot pour mot dans son contenu, mais placé dans une phrase à part après « and how long the call took on the clock `now`. », pour que l'énumération de la phrase d'origine reste lisible ; `tokensIn` et `tokensOut` entre accents graves, comme le reste du TSDoc. TSDoc de `UsageRecord` : insertion de la spécification telle quelle, la proposition « absent is not zero » suit après un deux-points.
+- [H] P3 · `docs/guide-agent-package.md:262` : la proposition commence par « a missing usage, » en minuscule, puisqu'elle suit « Absent is not zero: » au milieu de la phrase ; `README.md:232` garde la majuscule de début de phrase. Le contrôle 8 cherche sans casse.
+- [H] P4 · `recordedCounters` est repliée sous 100 colonnes (TSDoc sur 4 lignes, signature et ternaire sur 3 lignes chacun) au lieu des lignes de 108 à 123 colonnes de la spécification ; noms, signature, logique et lectures identiques. Le TSDoc gagne la phrase « The value checked is the value recorded. »
+- [H] P5 · Tests : assistant de fichier `recordOne(response)` (une décoration, un appel, la même référence vérifiée, horloge `scriptedClock([0, 5])`) partagé par les dix tests ; titres en anglais comme leurs voisins, préfixés `TEST-1 (issue 46)`, sans `#` ; libellés des lignes choisis par le plan ; `RateTable` importé par une ligne de types distincte de `../../../../dist/metrics/index.js` (spécification), `MetricsCollector` restant importé en valeur l.4.
+- [H] P6 · Taille : +118 −13 mesurées hors `docs/` et `*.md` (131 lignes) contre environ 95 estimées (fourchette 70 à 130), une ligne au-dessus de la fourchette, sous le seuil de 400 ; écart dû au repli sous 100 colonnes (P4, P5) et à l'assistant `recordOne`.
+- [H] P7 · La mutation `value > 0` fait échouer trois tests, pas un : la ligne « zero counters » de TEST-1 et deux tests de #42 (`TEST-4 (issue 42) the real run calls the given factory once, never fetch, and writes both CSV`, `TEST-6 (issue 42) the cap reached by the last call, none refused: the complete report, code 0`), parce que `HOSTED_USAGE` de `scripts/h2-report/run-report.test.ts:200` a `tokensIn: 0` et passe par `withMetrics` via `runMatrix` : la règle « zéro compris » est donc verrouillée deux fois. Constaté par le builder : `# tests 387`, `# pass 382`, `# fail 3`, puis 387 / 385 après `git restore`.
+- [H] P8 · Sorties observées par le planificateur sur une sonde (`git archive` de e846b9c, compilée par le `tsc` 5.9.3 du dépôt principal), pas sur un build frais de ce worktree ; `npm ci` non lancé par le planificateur. Confirmées par le builder après `npm ci` : référence 377 / 375, rouge 387 / 377 / 8, vert 387 / 385.
+- [H] P9 · Type et scope `fix(metrics)` (D6 de la spécification) ; correction de comportement sans changement de signature, relève d'un correctif (patch) ; `package.json` (version) n'est pas touché dans cette PR.
+- [H] Node · Node local ≥ 22.18 (retrait de types sans drapeau), constaté v22.19.0.
