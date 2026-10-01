@@ -1,12 +1,14 @@
 import type { CompletionOptions, LLMProvider } from "../../../llm/interfaces/index.js";
-import type { LLMResponse, Message, ModelInfo } from "../../../llm/models/index.js";
+import type { LLMResponse, Message, ModelInfo, Usage } from "../../../llm/models/index.js";
 import type { MetricsCollector } from "./metrics-collector.js";
 
 /**
  * Decorates `provider` so that every `complete` call that resolves leaves one record in
  * `collector` (ADR-AGENT-0007): the model the call asked for, `opts.model` (ADR-AGENT-0017),
- * the usage the provider reported, null when it reported none (absent is not zero), and how
- * long the call took on the clock `now`. The response comes back as is: the same object.
+ * the usage the provider reported, and how long the call took on the clock `now`. `tokensIn`
+ * and `tokensOut` are both null when the provider reported no usage (absent is not zero), or
+ * when either counter is not an integer >= 0 (#46): a negative, fractional, non-finite or
+ * non-numeric counter would misprice the call. The response comes back as is: the same object.
  *
  * The result is a new object literal of closures with exactly four own keys: `id`,
  * `supportsStreaming`, `models`, `complete`. Not a class, not a spread of the provider, not a
@@ -42,13 +44,28 @@ export function withMetrics(
     complete: async (messages: Message[], opts: CompletionOptions): Promise<LLMResponse> => {
       const startedAt = now();
       const response = await provider.complete(messages, opts);
-      collector.record({
-        model: opts.model,
-        tokensIn: response.usage?.tokensIn ?? null,
-        tokensOut: response.usage?.tokensOut ?? null,
-        durationMs: now() - startedAt,
-      });
+      const counters = recordedCounters(response.usage);
+      collector.record({ model: opts.model, ...counters, durationMs: now() - startedAt });
       return response;
     },
   };
+}
+
+/** #46: a usage counter is an integer >= 0 (so finite), the rule capGuard applies too (#41). */
+function isTokenCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+/**
+ * Both counters of `usage`, each read once: both counts, or both null when usage is absent or
+ * either is not a count. The value checked is the value recorded.
+ */
+function recordedCounters(
+  usage: Usage | undefined,
+): { tokensIn: number | null; tokensOut: number | null } {
+  const tokensIn = usage?.tokensIn;
+  const tokensOut = usage?.tokensOut;
+  return isTokenCount(tokensIn) && isTokenCount(tokensOut)
+    ? { tokensIn, tokensOut }
+    : { tokensIn: null, tokensOut: null };
 }

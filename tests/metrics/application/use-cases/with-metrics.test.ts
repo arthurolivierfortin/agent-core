@@ -5,7 +5,8 @@ import { MetricsCollector } from "../../../../dist/metrics/index.js";
 import { FakeLLMProvider, checkProviderContract } from "../../../../dist/testing/index.js";
 import { LLMError } from "../../../../dist/llm/index.js";
 import type { CompletionOptions, LLMProvider } from "../../../../dist/llm/interfaces/index.js";
-import type { LLMResponse, Message } from "../../../../dist/llm/models/index.js";
+import type { LLMResponse, Message, Usage } from "../../../../dist/llm/models/index.js";
+import type { RateTable } from "../../../../dist/metrics/index.js";
 
 // Design: docs/specs/2026-09-30-with-metrics-design.md (#11). Every provider below is scripted,
 // the fake or a literal written in this file: no hosted provider is ever called.
@@ -145,4 +146,90 @@ test("a decorated provider never streams, even when the provider it wraps does",
   assert.strictEqual(decorated.supportsStreaming(), false);
   assert.strictEqual("stream" in decorated, false);
   assert.deepEqual(Object.keys(decorated).sort(), ["complete", "id", "models", "supportsStreaming"]);
+});
+
+// Issue 46 (docs/specs/2026-10-01-metrics-invalid-usage-design.md): a usage counter that is not an
+// integer >= 0 leaves both counters null, so the total never prices it. Literal rates, 1 and 2 USD
+// per million tokens, never data/rates.json.
+const RATES: RateTable = { "fake-model": { usdPerMillionTokensIn: 1, usdPerMillionTokensOut: 2 } };
+
+/** One resolved call through withMetrics, clock read at 0 then 5: the collector it fed. */
+async function recordOne(response: LLMResponse): Promise<MetricsCollector> {
+  const collector = new MetricsCollector();
+  const fake = new FakeLLMProvider({ responses: [response] });
+  const decorated = withMetrics(fake, collector, scriptedClock([0, 5]));
+  const opts: CompletionOptions = { model: FakeLLMProvider.MODEL_ID };
+  assert.strictEqual(await decorated.complete(messages, opts), response);
+  return collector;
+}
+
+const INVALID_USAGES: ReadonlyArray<readonly [string, Usage]> = [
+  ["a negative tokensIn offset by tokensOut", { tokensIn: -1, tokensOut: 1_000_000 }],
+  ["a negative tokensOut offset by tokensIn", { tokensIn: 1_000_000, tokensOut: -1 }],
+  ["a fractional tokensIn", { tokensIn: 0.5, tokensOut: 125_000 }],
+  ["a NaN tokensIn", { tokensIn: NaN, tokensOut: 1 }],
+  ["an infinite tokensOut", { tokensIn: 1, tokensOut: Infinity }],
+  ["a numeric string tokensOut", { tokensIn: 250_000, tokensOut: "125000" as unknown as number }],
+  ["a partial usage (tokensOut null)", { tokensIn: 7, tokensOut: null as unknown as number }],
+];
+
+for (const [why, usage] of INVALID_USAGES) {
+  test(`TEST-1 (issue 46) ${why} is recorded as no usage and left unpriced`, async () => {
+    const collector = await recordOne({ content: why, toolCalls: [], usage });
+
+    assert.deepEqual(collector.records(), [
+      { model: "fake-model", tokensIn: null, tokensOut: null, durationMs: 5 },
+    ]);
+    assert.deepEqual(collector.total(RATES), {
+      calls: 1,
+      tokensIn: null,
+      tokensOut: null,
+      durationMs: 5,
+      costUsd: null,
+    });
+  });
+}
+
+const VALID_USAGES: ReadonlyArray<readonly [string, Usage, number]> = [
+  ["zero counters", { tokensIn: 0, tokensOut: 0 }, 0],
+  ["positive integer counters", { tokensIn: 500_000, tokensOut: 250_000 }, 1],
+];
+
+for (const [why, usage, costUsd] of VALID_USAGES) {
+  test(`TEST-1 (issue 46) ${why} are recorded as reported, and priced`, async () => {
+    const collector = await recordOne({ content: why, toolCalls: [], usage });
+
+    assert.deepEqual(collector.records(), [{ model: "fake-model", ...usage, durationMs: 5 }]);
+    assert.deepEqual(collector.total(RATES), { calls: 1, ...usage, durationMs: 5, costUsd });
+  });
+}
+
+test("TEST-1 (issue 46) usage and its counters are read once each", async () => {
+  const reads = { usage: 0, tokensIn: 0, tokensOut: 0 };
+  // A second read of tokensIn sees -1: recording another value than the one checked would show.
+  const usage: Usage = {
+    get tokensIn(): number {
+      reads.tokensIn += 1;
+      return reads.tokensIn === 1 ? 3 : -1;
+    },
+    get tokensOut(): number {
+      reads.tokensOut += 1;
+      return 4;
+    },
+  };
+  const response: LLMResponse = {
+    content: "read once",
+    toolCalls: [],
+    get usage(): Usage {
+      reads.usage += 1;
+      return usage;
+    },
+  };
+
+  const collector = await recordOne(response);
+
+  assert.deepEqual(collector.records(), [
+    { model: "fake-model", tokensIn: 3, tokensOut: 4, durationMs: 5 },
+  ]);
+  assert.deepEqual(reads, { usage: 1, tokensIn: 1, tokensOut: 1 });
 });
