@@ -35,7 +35,11 @@ export type ToolDefinition = {
   parameters: ToolSchema;
 };
 
-/** Token count for a call. Absent (not zero) when the provider does not supply it. */
+/**
+ * Token count for a call. Absent (not zero) when the provider does not supply it.
+ * Each counter is an integer >= 0: the shipped adapters leave usage absent rather than report a
+ * counter that is not (#51).
+ */
 export type Usage = {
   tokensIn: number;
   tokensOut: number;

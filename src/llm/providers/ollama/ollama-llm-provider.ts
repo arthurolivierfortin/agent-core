@@ -9,6 +9,7 @@ import type {
   LLMChunk,
   Usage,
 } from "../../models/index.js";
+import { isTokenCount } from "../token-count.js";
 
 /** The injectable fetch contract: the real global fetch in prod, a fake in tests, the seam that keeps the adapter testable offline. */
 type FetchLike = typeof fetch;
@@ -197,11 +198,16 @@ function toToolCalls(calls: OllamaToolCall[] | undefined): ToolCall[] {
   }));
 }
 
+/**
+ * Both counters of a final chunk, each an integer >= 0 (isTokenCount, #51), else undefined: absent
+ * is not zero (ADR-AGENT-0007), and a negative, fractional or infinite counter would corrupt the
+ * maxTokens budget. JSON reads 1e400 as Infinity.
+ */
 function toUsage(chunk: OllamaChatChunk): Usage | undefined {
-  if (typeof chunk.prompt_eval_count !== "number" || typeof chunk.eval_count !== "number") {
-    return undefined;
-  }
-  return { tokensIn: chunk.prompt_eval_count, tokensOut: chunk.eval_count };
+  const tokensIn = chunk.prompt_eval_count;
+  const tokensOut = chunk.eval_count;
+  if (!isTokenCount(tokensIn) || !isTokenCount(tokensOut)) return undefined;
+  return { tokensIn, tokensOut };
 }
 
 async function* readNdjson(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
