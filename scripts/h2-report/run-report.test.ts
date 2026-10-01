@@ -147,3 +147,31 @@ test("TEST-5 (issue 33) a local rate that is null is announced as rate null", as
   const line = "local model: local-x; rate null; effective 2026-09-30; source local";
   assert.ok(result.stdout.split("\n").includes(line), result.stdout);
 });
+
+const REAL_RUN_REFUSAL =
+  "refusing the real run: it is delivered by #42 (capped matrix, safe CSV writing); nothing was called, rerun with --dry-run\n";
+
+/** report(argv) with globalThis.fetch replaced by a counter that throws, restored in a finally. */
+async function reportWithoutNetwork(argv: readonly string[]): Promise<Outcome & { fetchCalls: number }> {
+  const original = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (async () => { throw new Error(`no network in these tests (call ${++fetchCalls})`); }) as unknown as typeof fetch;
+  try {
+    return { ...(await report(argv)), fetchCalls };
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+test("TEST-6 (issue 33) --dry-run: the announcement, the dry run line, code 0, no factory, no fetch", async () => {
+  const result = await reportWithoutNetwork([...ANNOUNCED, "--dry-run"]);
+  const stdout = `${ANNOUNCEMENT}dry run: no provider built, no call made\n`;
+  assert.deepEqual(result, { code: 0, stdout, stderr: "", factoryCalls: 0, fetchCalls: 0 });
+  assert.ok(!(result.stdout + result.stderr).includes(KEY));
+});
+
+test("TEST-6 (issue 33) without --dry-run: the same announcement, the real run refused, code 1", async () => {
+  const result = await reportWithoutNetwork(ANNOUNCED);
+  assert.deepEqual(result, { code: 1, stdout: ANNOUNCEMENT, stderr: REAL_RUN_REFUSAL, factoryCalls: 0, fetchCalls: 0 });
+  assert.ok(!(result.stdout + result.stderr).includes(KEY));
+});

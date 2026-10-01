@@ -98,9 +98,9 @@ function announcement(args: ReportArgs, entries: Readonly<Record<string, RateEnt
 }
 
 /**
- * Checks the arguments, the two models, the rate text, the start guard and --out, in this order; never
- * throws. The first defect goes to stderr and returns 1, nothing on stdout. Then the announcement goes
- * to stdout in one write, and it returns 1: nothing is launched. The provider factory is never called.
+ * Runs the report up to its announcement; never throws. The first defect (arguments, models, rate text,
+ * start guard, --out) goes to stderr and returns 1, nothing on stdout. Then the announcement, in one write:
+ * --dry-run returns 0; the real run is refused with 1 until #42. The provider factory is never called (P-5).
  */
 export async function runReport(io: ReportIO): Promise<number> {
   let args: ReportArgs;
@@ -119,5 +119,12 @@ export async function runReport(io: ReportIO): Promise<number> {
     return 1;
   }
   io.stdout.write(announcement(args, entries));
+  if (args.dryRun) {
+    io.stdout.write("dry run: no provider built, no call made\n");
+    return 0;
+  }
+  io.stderr.write(
+    "refusing the real run: it is delivered by #42 (capped matrix, safe CSV writing); nothing was called, rerun with --dry-run\n",
+  );
   return 1;
 }
