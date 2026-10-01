@@ -289,6 +289,10 @@ test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-ca
   );
 });
 
+// Délai du fils de TEST-3 (issue 26), qui dure environ 0,3 s : un fils bloqué fait échouer
+// ce test au lieu de figer la suite (#31).
+const CHILD_TIMEOUT_MS = 60_000;
+
 test("TEST-3 (issue 26) le test d'intégration Gemini est ignoré sans GEMINI_INTEGRATION=1", () => {
   const file = "tests/integration/gemini.integration.test.ts";
   // Le fils n'a ni l'opt-in ni la clé : il ne peut pas appeler l'API. NODE_TEST_CONTEXT, posé par
@@ -300,7 +304,13 @@ test("TEST-3 (issue 26) le test d'intégration Gemini est ignoré sans GEMINI_IN
     cwd: fileURLToPath(new URL("../", import.meta.url)),
     env,
     encoding: "utf8",
+    timeout: CHILD_TIMEOUT_MS,
   });
+  const timedOut = child.error?.code === "ETIMEDOUT" || child.signal === "SIGTERM";
+  assert.ok(
+    !timedOut,
+    `node --test ${file} : le sous-processus a dépassé le délai de ${CHILD_TIMEOUT_MS} ms et a été arrêté (erreur ${child.error?.code}, signal ${child.signal})\n${child.stdout}${child.stderr}`,
+  );
   assert.equal(child.status, 0, `node --test ${file} : code ${child.status}\n${child.stdout}${child.stderr}`);
   assert.ok(
     child.stdout.includes("# SKIP set GEMINI_INTEGRATION=1 with GEMINI_API_KEY in the environment"),
