@@ -129,6 +129,7 @@ const ANNOUNCEMENT = [
   "scenario: aller aux reglages",
   "runs per model (N): 3",
   "local model: local-x; rate 0 USD in, 0 USD out per million tokens; effective 2026-09-30; source local",
+  "local host: http://localhost:11434 (default, OLLAMA_HOST unset)",
   "hosted model: hosted-x; rate 0.3 USD in, 2.5 USD out per million tokens; effective 2026-10-01; source https://example.test/pricing",
   "max calls: 66, of which 33 hosted (at most 11 per run: maxIterations 10 plus the landing call)",
   "cap: 2.5 USD on the hosted model",
@@ -182,4 +183,9 @@ test("TEST-2 (issue 42) an --out under docs/demo is refused when only the case o
   let out = "";
   const result = await report((repo) => [...BASE, "--out", (out = join(repo.toUpperCase(), "docs", "demo"))]);
   assert.deepEqual(result, { code: 1, stdout: "", stderr: demoRefusal(out), factoryCalls: 0 });
+});
+
+test("TEST-3 (issue 42) the announcement names the Ollama host, from OLLAMA_HOST or the default", async () => {
+  const result = await report([...ANNOUNCED, "--dry-run"], { env: { ...ENV, OLLAMA_HOST: "http://ollama.test:11434" } });
+  assert.ok(result.stdout.split("\n").includes("local host: http://ollama.test:11434 (from OLLAMA_HOST)"), result.stdout);
 });

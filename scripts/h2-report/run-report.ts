@@ -43,6 +43,9 @@ export const REPORT_MAX_ITERATIONS = 10;
 // The H1 scenario #42 runs; #33 only names it.
 const SCENARIO = "aller aux reglages";
 
+// The default of OllamaLLMProvider (ollama-llm-provider.ts), not exported by the package.
+const DEFAULT_OLLAMA_HOST = "http://localhost:11434";
+
 /**
  * Default provider factory for #42, never called by #33 (P-5). The models come from `args`, never from PROVIDERS:
  * OLLAMA_MODEL and GEMINI_MODEL change nothing; OLLAMA_HOST stays honoured (R-2). Building calls no network.
@@ -78,7 +81,7 @@ function rateText(entry: RateEntry): string {
 }
 
 /** The announcement, a line each, ended by a newline; the rates' presence is checked by assertReadyToStart. */
-function announcement(args: ReportArgs, entries: Readonly<Record<string, RateEntry>>): string {
+function announcement(args: ReportArgs, entries: Readonly<Record<string, RateEntry>>, env: ReportIO["env"]): string {
   const perRun = REPORT_MAX_ITERATIONS + 1;
   const model = (label: string, id: string): string => {
     const entry = entries[id];
@@ -89,6 +92,10 @@ function announcement(args: ReportArgs, entries: Readonly<Record<string, RateEnt
     `scenario: ${SCENARIO}`,
     `runs per model (N): ${args.runs}`,
     model("local", args.ollamaModel),
+    // Taken as is, an empty value too: OllamaLLMProvider reads OLLAMA_HOST with ??.
+    env.OLLAMA_HOST === undefined
+      ? `local host: ${DEFAULT_OLLAMA_HOST} (default, OLLAMA_HOST unset)`
+      : `local host: ${env.OLLAMA_HOST} (from OLLAMA_HOST)`,
     model("hosted", args.geminiModel),
     `max calls: ${2 * args.runs * perRun}, of which ${args.runs * perRun} hosted` +
       ` (at most ${perRun} per run: maxIterations ${REPORT_MAX_ITERATIONS} plus the landing call)`,
@@ -119,7 +126,7 @@ export async function runReport(io: ReportIO): Promise<number> {
     io.stderr.write(`${messageOf(error)}\n`);
     return 1;
   }
-  io.stdout.write(announcement(args, entries));
+  io.stdout.write(announcement(args, entries, io.env));
   if (args.dryRun) {
     io.stdout.write("dry run: no provider built, no call made\n");
     return 0;
