@@ -1,0 +1,3 @@
+scenario,model,runs,passed,successRate,meanDurationMs,tokensUsed,costUsd
+aller aux reglages,qwen2.5:0.5b,5,0,0,15287.8,1198,0
+aller aux reglages,gemini-2.5-flash,5,4,0.8,1168,1425,0.0012216999999999998

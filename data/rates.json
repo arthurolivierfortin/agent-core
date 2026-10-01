@@ -1,11 +1,17 @@
 {
   "gemini-2.5-flash": {
-    "rate": null,
-    "effectiveFrom": "2026-09-30",
-    "source": "non saisi : tarif à vérifier par Arthur sur la page de prix de l'API Gemini"
+    "rate": {
+      "usdPerMillionTokensIn": 0.3,
+      "usdPerMillionTokensOut": 2.5
+    },
+    "effectiveFrom": "2026-10-01",
+    "source": "https://ai.google.dev/gemini-api/docs/pricing (paid tier, texte : 0,30 $ entree, 2,50 $ sortie dont jetons de pensee, par million ; releve le 2026-10-01)"
   },
   "qwen2.5:0.5b": {
-    "rate": { "usdPerMillionTokensIn": 0, "usdPerMillionTokensOut": 0 },
+    "rate": {
+      "usdPerMillionTokensIn": 0,
+      "usdPerMillionTokensOut": 0
+    },
     "effectiveFrom": "2026-09-30",
     "source": "local"
   }
