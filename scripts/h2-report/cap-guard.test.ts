@@ -333,3 +333,29 @@ test("TEST-1 (issue 41) two counters of 1e308 overflow the cost to Infinity, whi
   assert.equal(double.count(), 2);
   assert.equal(guard.refused(), 1);
 });
+
+// Issue 41: a resolved response that cannot be read rejects the call with the same error, and cuts
+// the matrix (unclassified) whatever that error is; classifyCut is for rejected calls only.
+const USAGE_ERROR = new LLMError("API_ERROR", "unreadable usage", { status: 429 });
+const UNREADABLE_RESPONSES: ReadonlyArray<readonly [string, LLMResponse, object]> = [
+  ["an undefined response", undefined as unknown as LLMResponse, { name: "TypeError" }],
+  ["a null response", null as unknown as LLMResponse, { name: "TypeError" }],
+  [
+    "a usage accessor throwing an LLMError of status 429",
+    { content: "getter", toolCalls: [], get usage(): Usage { throw USAGE_ERROR; } },
+    (thrown: unknown) => thrown === USAGE_ERROR,
+  ],
+];
+
+for (const [title, response, rejection] of UNREADABLE_RESPONSES) {
+  test(`TEST-2 (issue 41) ${title} rejects the call, then cuts the matrix (unclassified)`, async () => {
+    const double = scripted([PRICED, { response }]);
+    const guard = capGuard(double.provider, RATES, 10);
+    await guard.complete(HI, OPTS);
+    await assert.rejects(guard.complete(HI, OPTS), rejection);
+    assert.deepEqual([guard.cutReason(), guard.spentUsd(), guard.refused()], ["unclassified", 0.5, 0]);
+    await assert.rejects(guard.complete(HI, OPTS), { message: cutMessage(MODEL, "unclassified") });
+    assert.equal(double.count(), 2);
+    assert.equal(guard.refused(), 1);
+  });
+}

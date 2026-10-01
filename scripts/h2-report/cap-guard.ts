@@ -59,6 +59,8 @@ function usageCounters(response: LLMResponse): { tokensIn: number; tokensOut: nu
  * adds up the finite, non-negative costs only: a cost that is null, not finite or negative is
  * unknown, and cuts the matrix (unclassified) without entering it. #41: each usage counter, read
  * once, must be an integer >= 0, else the cost is unknown and cuts the matrix (unclassified) too.
+ * #41 too: a response that cannot be read (undefined, null, an accessor that throws) cuts the
+ * matrix (unclassified), whatever it throws, and the call rejects with that same error.
  *
  * The first rejected call cuts the matrix, classified on LLMError.status only. Its reason network
  * means an LLMError without status: with GeminiLLMProvider a rejected fetch, but also an ok
@@ -97,7 +99,15 @@ export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number
       cut ??= classifyCut(error);
       throw error;
     }
-    const counters = usageCounters(response);
+    let counters: { tokensIn: number; tokensOut: number } | null;
+    try {
+      counters = usageCounters(response);
+    } catch (error) {
+      // #41: the call took place but its response cannot be read: its cost is unknown, whatever the
+      // error says, since classifyCut is for rejected calls only. The same error goes on.
+      cut ??= "unclassified";
+      throw error;
+    }
     const cost = counters === null ? null : aggregate([{ model: opts.model, ...counters, durationMs: 0 }], rates).costUsd;
     // Returned all the same, since the call took place; a cost that became unknown cuts the matrix.
     // #39: a NaN, infinite or negative cost is unknown too; added up, it would blind the cap.
