@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, parse } from "node:path";
 import { GeminiLLMProvider, LLMError, OllamaLLMProvider } from "../../dist/index.js";
 import type { LLMProvider, LLMResponse, Usage } from "../../dist/index.js";
 import * as runner from "./run-report.ts";
@@ -264,6 +264,15 @@ test("TEST-5 (issue 42) machine paths become <repo> then <home>, in their slash 
   const runs = result.files?.["runs.csv"] ?? "";
   assert.ok(runs.includes("cannot open <repo>/a and <repo>/b and <repo>\\c in <home>"), "runs.csv: machine paths not replaced");
   for (const raw of [repo, repo.replaceAll("\\", "/"), dirname(repo)]) assert.ok(!runs.includes(raw), "runs.csv: a machine path remains");
+});
+
+test("TEST-5 (issue 42) an empty home, or a filesystem root as home, is never replaced", async () => {
+  for (const home of [(): string => "", (root: string): string => parse(root).root]) {
+    let raw = "";
+    const local = (root: string) => scripted("local-x", LOCAL_USAGE, (call) => (call === 1 ? new Error(`cannot open ${(raw = home(root))}x`) : undefined));
+    const result = await launched(COMPLETE, { home, providers: (root) => ({ local: local(root), hosted: scripted("hosted-x", HOSTED_USAGE) }) });
+    assert.ok(result.files?.["runs.csv"].includes(`cannot open ${raw}x`), "runs.csv: an empty or filesystem root was replaced");
+  }
 });
 
 const SHORT = [...BASE, "--runs", "2", "--out", "out/"];
