@@ -93,3 +93,13 @@ test("TEST-1 (issue 33) a __proto__ key stays an own entry of loadRateEntries", 
   assert.equal(Object.getPrototypeOf(entries), Object.prototype);
   assert.deepEqual(Object.getOwnPropertyDescriptor(entries, "__proto__")?.value, ENTRY);
 });
+
+// Rate entries of the H2 report (#42): docs/specs/2026-09-30-h2-report-launch-design.md.
+
+test("TEST-1 (issue 42) both functions refuse a source that holds a line break", () => {
+  for (const source of ["https://a.test/\nnext", "a\rb"]) {
+    for (const load of [loadRateFile, loadRateEntries]) {
+      assert.throws(() => load(withEntry({ source })), { message: "rates['m'].source: must hold no line break" });
+    }
+  }
+});

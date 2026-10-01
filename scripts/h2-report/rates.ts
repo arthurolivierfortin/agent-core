@@ -56,6 +56,7 @@ function readEntry(id: string, entry: unknown): RateEntry {
   if (typeof entry.source !== "string" || entry.source.trim() === "") {
     throw new Error(`${where}.source: must be a non-empty string`);
   }
+  if (/[\r\n]/.test(entry.source)) throw new Error(`${where}.source: must hold no line break`);
   const rate = readRate(entry.rate, `${where}.rate`, entry.source);
   return { rate, effectiveFrom: entry.effectiveFrom, source: entry.source };
 }
