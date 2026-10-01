@@ -15,8 +15,22 @@ Spécification : docs/specs/2026-10-01-roadmap-metrics-tree-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+
+- [H] R-1 (spécification) · `docs/guide-agent-package.md:105-110` : l'arborescence du guide porte les deux mêmes lignes périmées (`interfaces/metrics-collector.ts` l.107, `infrastructure/collector.ts` l.109), sans `metrics-collector.ts` ni `with-metrics.ts` sous `application/use-cases/`. Hors de la portée fixée par l'issue et le pilote. Options : (a) issue de suivi « aligner l'arborescence metrics/ du guide » ; (b) un `[SPEC-3]` dans cette PR (environ +3 −2 dans le guide, en anglais, et un test frère de TEST-1, environ +15). Sans décision, la PR reste à SPEC-1 et SPEC-2.
+- [H] R-2 (spécification) · Autres sous-arbres de la carte, divergents de l'arbre réel, non corrigés ici : `llm/providers/ollama/ollama-adapter.ts` (réel `ollama-llm-provider.ts`), `llm/providers/gemini/gemini-adapter.ts` (réel `gemini-llm-provider.ts` et `gemini-wire.ts`), `llm/services/response-parser.ts` (absent), `llm/testing/` absent de la carte, `agent/services/step.ts` (réel `agent/application/use-cases/step.ts`), les fichiers listés sous `testing/` qui vivent sous `src/llm/testing/` et `src/agent/testing/`, « The 3 entry points » alors que `package.json` exporte aussi `./llm`. À ouvrir en issue de suivi si le pilote le veut ; TEST-1 pourra alors être généralisé.
+- [H] R-3 (spécification) · Carte cible et fichiers futurs (D4) : si une ligne `[Vn]` est un jour ajoutée sous `metrics/`, TEST-1 échouera ; son message d'échec dit qu'elle devra être exclue de la comparaison.
+- [H] P1 · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de SPEC-1 (spécification ; précédent P1 de #20, #31, #35, #46).
+- [H] P2 · Les commandes ciblées ajoutent `--test-reporter=tap` à `node --test scripts/repo-conventions.test.mjs` de la checklist, pour que la forme de la sortie (`not ok`, message, différence, `# tests`) soit celle du plan quel que soit le terminal ; le fichier et les tests exécutés sont les mêmes.
+- [H] P3 · Sorties du plan observées par le planificateur sur une sonde (`git archive` de 4a4b8c2, compilée par le `tsc` 5.9.3 du dépôt principal) ; le builder les a retrouvées à l'identique sur ce worktree après `npm ci` (référence 387 / 385 / 0 / 2).
+- [H] P4 · Un troisième commit, `docs(checklist): cocher les gates et consigner les hypothèses`, coche les gates après GATE-3 (précédent des commits `chore(checklist)` de #31 et #32 ; type `docs` ici, comme l'exige le pilote pour cette PR).
+- [H] P5 · Rouge de TEST-2 sur `main` : l'assertion qui échoue est celle de la ligne `   */` (l'ancien TSDoc tient sur une ligne), non l'égalité de phrase ; celle-ci n'échoue que si un bloc de plusieurs lignes porte une autre phrase. Les deux sont des échecs pour la bonne raison (la phrase de #46 absente).
+- [H] P6 · Pas de `npm run build` pendant les mutations A et B : la commande ciblée lit les sources et l'arbre de `src/metrics/` sur disque ; un build pendant B émettrait `dist/metrics/interfaces/probe.js` et `.d.ts`, que la suppression de la source ne retire pas.
+- [H] P7 · Forme de TEST-1 : chaque ligne devient `{ line, path }` (premier mot de la ligne rognée) ; la recherche de `MetricsCollector` se fait sur la ligne dont le chemin vaut exactement `application/use-cases/metrics-collector.ts`. Forme de TEST-2 : constante au niveau du module, coupée en deux littéraux comme `HTTP_STATUS_SENTENCE` (D5). Tests +42 −0.
+- [H] P8 · Taille : +46 −1 mesurées hors `docs/` et `*.md` (47 lignes), dans la fourchette 35 à 60 de la spécification, sous le seuil de 400.
+- [H] P9 · Fins de ligne : `ROADMAP.md`, le fichier de test et `run-matrix.ts` en CRLF dans la copie de travail (`core.autocrlf` `true`), stockés en LF par git ; les éditions se font par l'outil Edit, qui garde la fin de ligne du fichier.
+- [H] Node · Node local ≥ 22.18 (retrait de types sans drapeau ; `readdirSync` récursif présent depuis Node 20.1), constaté v22.19.0.
