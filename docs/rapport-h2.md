@@ -6,7 +6,7 @@ Le lancement est un geste manuel d'Arthur : aucune suite de tests ni aucune bouc
 
 ## Prérequis
 
-- Node 22, et `npm ci` fait une fois à la racine du dépôt.
+- Node 22.18 ou plus (suppression des types activée par défaut), et `npm ci` fait une fois à la racine du dépôt.
 - Ollama démarré, avec le modèle local tiré : `ollama pull qwen2.5:0.5b`. L'hôte effectif est annoncé avant tout appel, sur la ligne `local host:` (la valeur de `OLLAMA_HOST`, sinon `http://localhost:11434`).
 - Si tous les runs locaux portent `Ollama request failed` dans la colonne `error` de `runs.csv`, le rapport est complet mais inutilisable : ne pas le commiter, réparer Ollama et relancer dans un autre `--out`.
 
