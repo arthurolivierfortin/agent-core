@@ -289,6 +289,27 @@ test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-ca
   );
 });
 
+test("TEST-1 (issue 23) ROADMAP : la carte de metrics/ liste exactement les fichiers .ts de src/metrics/", () => {
+  const lines = splitLines(readRepoFile("ROADMAP.md"));
+  const metrics = lines.indexOf("  metrics/");
+  const voice = lines.findIndex((line, index) => index > metrics && line.startsWith("  voice/"));
+  assert.ok(metrics !== -1 && voice !== -1, "ROADMAP.md : sous-arbres metrics/ puis voice/ introuvables");
+  const entries = lines.slice(metrics + 1, voice).map((line) => ({ line, path: line.trim().split(/\s+/)[0] }));
+  for (const { line, path } of entries) {
+    assert.ok(path.endsWith(".ts"), `ROADMAP.md : ligne du sous-arbre metrics/ sans chemin .ts en tête : « ${line} »`);
+  }
+  const files = readdirSync(new URL("../src/metrics/", import.meta.url), { recursive: true })
+    .map((name) => name.replaceAll("\\", "/"))
+    .filter((name) => name.endsWith(".ts"));
+  assert.deepEqual(
+    entries.map(({ path }) => path).sort(),
+    files.sort(),
+    "ROADMAP.md : la carte de metrics/ diffère des fichiers .ts de src/metrics/ (une ligne [Vn] future devra être exclue de la comparaison)",
+  );
+  const collector = entries.find(({ path }) => path === "application/use-cases/metrics-collector.ts");
+  assert.ok(collector?.line.includes("MetricsCollector"), "ROADMAP.md : ligne application/use-cases/metrics-collector.ts sans MetricsCollector");
+});
+
 // Délai du fils de TEST-3 (issue 26), qui dure environ 0,3 s : un fils bloqué fait échouer
 // ce test au lieu de figer la suite (#31).
 const CHILD_TIMEOUT_MS = 60_000;

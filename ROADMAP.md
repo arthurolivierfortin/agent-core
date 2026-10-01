@@ -150,10 +150,10 @@ src/
     infrastructure/              ReadFile · WriteFile · ListFiles   → exported by "./tools"
   metrics/
     models/index.ts              UsageRecord · MetricsTotal · RateTable
-    interfaces/metrics-collector.ts
     services/aggregate.ts        pure: records → MetricsTotal (with RateTable)
+    application/use-cases/metrics-collector.ts   MetricsCollector (class: the records of one run or batch)
     application/use-cases/with-metrics.ts   withMetrics (LLMProvider → MetricsCollector decorator)
-    infrastructure/collector.ts  MetricsCollector
+    index.ts                     barrel of the framework, re-exported by "."
   voice/                          [V4]: the whole framework
     interfaces/voice-provider.ts
     providers/
