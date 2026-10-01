@@ -175,3 +175,11 @@ test("TEST-6 (issue 33) without --dry-run: the same announcement, the real run r
   assert.deepEqual(result, { code: 1, stdout: ANNOUNCEMENT, stderr: REAL_RUN_REFUSAL, factoryCalls: 0, fetchCalls: 0 });
   assert.ok(!(result.stdout + result.stderr).includes(KEY));
 });
+
+// Launch of the H2 report (#42): docs/specs/2026-09-30-h2-report-launch-design.md.
+
+test("TEST-2 (issue 42) an --out under docs/demo is refused when only the case of the repo differs", async () => {
+  let out = "";
+  const result = await report((repo) => [...BASE, "--out", (out = join(repo.toUpperCase(), "docs", "demo"))]);
+  assert.deepEqual(result, { code: 1, stdout: "", stderr: demoRefusal(out), factoryCalls: 0 });
+});

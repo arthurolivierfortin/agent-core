@@ -61,8 +61,9 @@ function messageOf(error: unknown): string {
 /** Refuses --out under docs/demo/, any case (P-2), then one holding a REPORT_FILES name (P-3); only reads. */
 function assertOutFree(out: string, repo: string): void {
   const target = resolve(repo, out);
-  const segments = relative(repo, target).split(/[\\/]/);
-  if (segments[0]?.toLowerCase() === "docs" && segments[1]?.toLowerCase() === "demo") {
+  // Lower-cased before relative, on every platform (R-3): a doubt refuses, another --out repairs it.
+  const segments = relative(repo.toLowerCase(), target.toLowerCase()).split(/[\\/]/);
+  if (segments[0] === "docs" && segments[1] === "demo") {
     throw new Error(`--out must not be under docs/demo/ (the H1 proof there is compared byte for byte), got '${out}'`);
   }
   const taken = REPORT_FILES.filter((name) => existsSync(join(target, name)));
