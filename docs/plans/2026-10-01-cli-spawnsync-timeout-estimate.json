@@ -1,0 +1,22 @@
+{
+  "classe": "chore",
+  "nature": "mecanique",
+  "points": 2,
+  "nb_spec": 2,
+  "nb_db": 0,
+  "duree_estimee_s": 4540,
+  "tokens_estimes": 56000,
+  "intervalle_bas_s": 3178,
+  "intervalle_haut_s": 6810,
+  "recette_version": "v3",
+  "grille_version": "g1",
+  "echantillon": 14,
+  "modele_builder": "claude-opus-5-5",
+  "niveau_recette": "cellule",
+  "coefficient_recette": 1.94,
+  "n_recette": 11,
+  "detail": [
+    { "spec_id": "SPEC-1", "duree_s": 1195, "motif": "SPEC avec test ; base v2 calibrée cas 1 = 616 s ; v3 ×1,94, source cellule, n = 11" },
+    { "spec_id": "SPEC-2", "duree_s": 1195, "motif": "SPEC avec test ; base v2 calibrée cas 1 = 616 s ; v3 ×1,94, source cellule, n = 11" }
+  ]
+}
