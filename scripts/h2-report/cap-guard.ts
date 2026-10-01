@@ -36,6 +36,19 @@ function classifyCut(error: unknown): CutReason {
   return "unclassified";
 }
 
+/** #41: a usage counter is an integer >= 0 (so finite); anything else makes the call's cost unknown. */
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+/** The two counters of a response, each read once; null when usage is absent or either is not a count. */
+function usageCounters(response: LLMResponse): { tokensIn: number; tokensOut: number } | null {
+  const usage = response.usage;
+  const tokensIn = usage?.tokensIn;
+  const tokensOut = usage?.tokensOut;
+  return isCount(tokensIn) && isCount(tokensOut) ? { tokensIn, tokensOut } : null;
+}
+
 /**
  * Wraps the only hosted provider of the H2 matrix. One instance, built by the runner (#33) around
  * that provider and shared by every run, placed under withMetrics, which records no refused call.
@@ -44,7 +57,8 @@ function classifyCut(error: unknown): CutReason {
  *
  * A call's cost is aggregate() of its one record, the arithmetic of the report's total. spentUsd
  * adds up the finite, non-negative costs only: a cost that is null, not finite or negative is
- * unknown, and cuts the matrix (unclassified) without entering it.
+ * unknown, and cuts the matrix (unclassified) without entering it. #41: each usage counter, read
+ * once, must be an integer >= 0, else the cost is unknown and cuts the matrix (unclassified) too.
  *
  * The first rejected call cuts the matrix, classified on LLMError.status only. Its reason network
  * means an LLMError without status: with GeminiLLMProvider a rejected fetch, but also an ok
@@ -83,8 +97,8 @@ export function capGuard(provider: LLMProvider, rates: RateTable, capUsd: number
       cut ??= classifyCut(error);
       throw error;
     }
-    const usage = { tokensIn: response.usage?.tokensIn ?? null, tokensOut: response.usage?.tokensOut ?? null };
-    const cost = aggregate([{ model: opts.model, ...usage, durationMs: 0 }], rates).costUsd;
+    const counters = usageCounters(response);
+    const cost = counters === null ? null : aggregate([{ model: opts.model, ...counters, durationMs: 0 }], rates).costUsd;
     // Returned all the same, since the call took place; a cost that became unknown cuts the matrix.
     // #39: a NaN, infinite or negative cost is unknown too; added up, it would blind the cap.
     if (cost === null || !Number.isFinite(cost) || cost < 0) cut ??= "unclassified";
