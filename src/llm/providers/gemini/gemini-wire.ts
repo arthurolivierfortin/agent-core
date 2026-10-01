@@ -18,6 +18,7 @@
 
 import { LLMError } from "../../models/index.js";
 import type { LLMResponse, Message, ToolCall, ToolDefinition, Usage } from "../../models/index.js";
+import { isTokenCount } from "../token-count.js";
 
 export type GeminiFunctionCall = { id?: string; name: string; args?: Record<string, unknown> };
 export type GeminiFunctionResponse = { name: string; response: { content: string } };
@@ -177,15 +178,20 @@ function firstCandidateParts(body: GeminiResponse): GeminiPart[] {
 }
 
 /**
- * Tokens of a call, thinking counted as output (H4). The three counters must be numbers, else usage
- * stays undefined (#39); thoughtsTokenCount alone may be missing, and then counts 0. For the other
- * two, absent is not zero (ADR-AGENT-0007).
+ * Tokens of a call, thinking counted as output (H4). Each counter, and the output sum, must be an
+ * integer >= 0 (isTokenCount, #51), else usage stays undefined: a negative, fractional, NaN or
+ * infinite counter would corrupt the maxTokens budget, and a non-number would too (#39).
+ * thoughtsTokenCount alone may be missing, and then counts 0. For the other two, absent is not
+ * zero (ADR-AGENT-0007).
  */
 function toUsage(metadata: GeminiResponse["usageMetadata"]): Usage | undefined {
   const tokensIn = metadata?.promptTokenCount;
   const candidateTokens = metadata?.candidatesTokenCount;
   const thoughts = metadata?.thoughtsTokenCount;
-  if (typeof tokensIn !== "number" || typeof candidateTokens !== "number") return undefined;
-  if (thoughts !== undefined && typeof thoughts !== "number") return undefined;
-  return { tokensIn, tokensOut: candidateTokens + (thoughts ?? 0) };
+  if (!isTokenCount(tokensIn) || !isTokenCount(candidateTokens)) return undefined;
+  if (thoughts !== undefined && !isTokenCount(thoughts)) return undefined;
+  // Two valid counters may still sum past Number.MAX_VALUE, to Infinity.
+  const tokensOut = candidateTokens + (thoughts ?? 0);
+  if (!isTokenCount(tokensOut)) return undefined;
+  return { tokensIn, tokensOut };
 }
