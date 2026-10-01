@@ -91,3 +91,9 @@ Recopiées en entier de la spécification (« Décisions et alternatives écart�
 - [H] La lecture de H2 à H4 du document reprend la spécification ; elle n'a pas été confrontée à une vraie réponse de Gemini (aucune exécution réelle permise).
 - [H] Comptes de la suite pour M8a et M8b déduits (observés sur `cli.test.ts` seul) : un écart de comptes sans `not ok` nouveau n'est pas un échec, un `not ok` hors des titres prévus en est un.
 - [H] `scrubMachinePaths` est sensible à la casse (R-2) : un message d'erreur qui écrirait le chemin avec une autre casse de lecteur garderait le chemin ; Arthur relit les CSV (geste 5).
+
+### Reprise 1 (revue de la PR #44)
+- [H] Écart déclaré : le commit `641c9ec` (SPEC-8) aurait dû être typé `refactor` ; il ne change aucun comportement (les tarifs étaient déjà lus sous la racine par `import.meta.url`). Il n'est pas réécrit, faute de réécriture d'historique autorisée ; il disparaît au squash, dont le message `feat` reste juste. Précédent accepté par le pilote : #26 (commit `549c9c8`).
+- [H] `docs/rapport-h2.md` exige Node 22.18 ou plus (suppression des types activée par défaut), au lieu de « Node 22 ».
+- [H] Cas limite de SPEC-5 couvert : un `home` vide ou racine du système de fichiers (`parse(repo).root`) n'est pas remplacé ; mordant prouvé par deux mutations (garde `root === ""` retirée, garde `dirname(root) === root` retirée), chacune rouge puis annulée.
+- [H] Borne de SPEC-6 couverte : plafond de 2 USD atteint par le dernier appel hébergé, aucun refus, donc rapport complet (`summary.csv`, `runs.csv`), stderr vide, code 0 ; mordant prouvé par la mutation qui retire `&& guard.refused() > 0`, rouge puis annulée.
