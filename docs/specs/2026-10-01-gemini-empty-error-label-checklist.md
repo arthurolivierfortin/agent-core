@@ -13,9 +13,20 @@ Spécification : docs/specs/2026-10-01-gemini-empty-error-label-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
-(vide à la rédaction ; builder y inscrit chaque hypothèse sous laquelle il a poursuivi, une par ligne, préfixée `- [H]`)
+- [H] **R-1** (spécification) · Forme réelle d'un `error.message` vide chez Gemini : non observée sur l'API réelle ; le cas est construit sur un double, comme H8 de #25. Le correctif ne dépend que de `typeof message === "string" && message === ""`.
+- [H] **R-2** (spécification) · Textes faits de blancs seuls : un `error.message` valant `" "` ou un corps valant `"  "` sont cités tels quels (message qui finit par `: ` suivi de blancs), avant comme après #32. Hors de l'attendu de l'issue ; candidat à une issue de suivi si le pilote veut un libellé pour eux.
+- [H] **R-3** (spécification) · Consommateurs qui comparent le texte : aucun dans le dépôt (recherche de `empty body` hors `docs/` : `src/llm/providers/gemini/gemini-llm-provider.ts:146` et le fichier de test seulement). Un consommateur externe qui comparait `(empty body)` pour ce cas verra le nouveau libellé ; le message n'est pas un contrat (`code` l'est), d'où le type `fix` sans montée de version.
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de SPEC-1 (spécification ; précédent P1 de #20, #35, #39, #41, #46, #31).
+- [H] **P2** · Commentaire de `httpError` : la phrase de la checklist est insérée littéralement « après sa première phrase », c'est-à-dire juste après `The LLMError of a non-ok response.` ; la phrase suivante (`The message quotes Gemini's error.message …`) est repliée sur trois lignes sous 100 colonnes, texte inchangé. D'où code +7 −3 au lieu des +4 −1 estimés.
+- [H] **P3** · Forme de TEST-1 : constantes locales `emptyMessage`, `emptyNotFound`, `noMessage` et erreurs nommées `badRequest`, `noModel`, appels `expectFailure` sur plusieurs lignes comme leurs voisins (l.525-549) ; un seul `test()`, même position, titre et commentaire de la checklist mot pour mot. Tests +24 −4.
+- [H] **P4** · Les commandes ciblées ajoutent `--test-reporter=tap` à `node --test tests/llm/providers/gemini/gemini-llm-provider.test.ts` de la spécification, pour que la forme de la sortie (`not ok`, `expected`, `actual`, `# tests`) soit celle du plan quel que soit le terminal ; le fichier et les tests exécutés sont les mêmes.
+- [H] **P5** · Sorties du plan observées par le planificateur sur une sonde (`git archive` de 491746a), pas sur un build frais du worktree ; le builder a lancé `npm ci` et retrouvé les mêmes totaux (référence B = 387 tests, 385 réussis, 2 ignorés).
+- [H] **P6** · Taille : +31 −7 mesurées hors `docs/` et `*.md` (38 lignes), dans la fourchette 25 à 40 de la spécification, sous le seuil de 400.
+- [H] **P7** · Fins de ligne : source et test en CRLF dans la copie de travail (`core.autocrlf` `true`), stockés en LF par git ; les éditions se font par l'outil Edit, qui garde la fin de ligne du fichier.
+- [H] **Node** · Node local ≥ 22.18 (retrait de types sans drapeau), constaté v22.19.0 par le planificateur et par le builder (`node --version`).
+- [H] **Risques du plan** · `dist/` périmé (parade : `npm run build` avant chaque `node --test`, mutations comprises) ; copie de `dist/` de `main` faite avant toute modification de `src/` ; mutation oubliée (parade : `git diff --stat` vide après chaque restauration, `git status --short` vide après GATE-3, numstat exact) ; garde réseau `GEMINI_INTEGRATION` à 0 avant chaque test ; garde d'isolation du worktree (une commande par appel) ; R-2, défaut résiduel déclaré hors périmètre.
