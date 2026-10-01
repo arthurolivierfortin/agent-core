@@ -1,6 +1,7 @@
 import { LLMError } from "../../../llm/models/index.js";
 import type { CompletionOptions } from "../../../llm/interfaces/index.js";
 import type { LLMResponse, Message, ToolCall, Usage } from "../../../llm/models/index.js";
+import { isTokenCount } from "../../../llm/services/token-count.js";
 import { dispatchTool, toToolDefinition } from "../../../tools/index.js";
 import type { Tool, ToolResult } from "../../../tools/index.js";
 import type { AgentDeps, AgentInput, AgentResult, AgentState, StopReason } from "../dtos/index.js";
@@ -273,9 +274,22 @@ function toToolMessage(result: ToolResult): Message {
   return { role: "tool", content: result.content, toolCallId: result.toolCallId };
 }
 
+/**
+ * The tokens one call adds to the budget. Both counters, and their sum, must be integers >= 0
+ * (isTokenCount, the rule the shipped adapters apply), else the call adds nothing, exactly as if
+ * the provider had reported no usage. A provider written outside the package, or a scripted fake,
+ * can still hand back NaN, a negative, a fraction or Infinity, and one such value would keep
+ * maxTokens from ever falling (#60). The valid partner of an invalid counter is not counted
+ * either: a usage with one wrong counter is not trusted for the other.
+ */
 function tokensOf(usage: Usage | undefined): number {
-  if (usage === undefined) return 0;
-  return usage.tokensIn + usage.tokensOut;
+  const tokensIn = usage?.tokensIn;
+  const tokensOut = usage?.tokensOut;
+  if (!isTokenCount(tokensIn) || !isTokenCount(tokensOut)) return 0;
+  const total = tokensIn + tokensOut;
+  // Two valid counters may still sum past Number.MAX_VALUE, to Infinity.
+  if (!isTokenCount(total)) return 0;
+  return total;
 }
 
 function clock(deps: AgentDeps): () => number {
