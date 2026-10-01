@@ -353,6 +353,35 @@ test("report.toRunsCSV() writes one line per run: failures joined, a thrown erro
   );
 });
 
+test("report.toCSV() quotes a field that holds a lone CR (RFC 4180)", async () => {
+  let t = 0;
+  const report = await matrix({ axes: { model: ["a\rb"] }, now: () => (t += 10) });
+
+  assert.equal(
+    report.toCSV(),
+    'scenario,model,runs,passed,successRate,meanDurationMs,tokensUsed,costUsd\r\n' +
+      'aller aux reglages,"a\rb",1,1,1,50,,\r\n',
+  );
+});
+
+test("report.toCSV() and report.toRunsCSV() write an empty cell for an undefined axis value, like null", async () => {
+  let t = 0;
+  const report = await matrix({ axes: { memory: [null, undefined] }, now: () => (t += 10) });
+
+  assert.equal(
+    report.toCSV(),
+    "scenario,memory,runs,passed,successRate,meanDurationMs,tokensUsed,costUsd\r\n" +
+      "aller aux reglages,,1,1,1,50,,\r\n" +
+      "aller aux reglages,,1,1,1,50,,\r\n",
+  );
+  assert.equal(
+    report.toRunsCSV(),
+    "scenario,memory,run,passed,failures,error,durationMs,tokensUsed,costUsd,stopReason\r\n" +
+      "aller aux reglages,,1,true,,,50,,,completed\r\n" +
+      "aller aux reglages,,1,true,,,50,,,completed\r\n",
+  );
+});
+
 test("report.toJSON() copies each run's combination, failures and trace, and each line's combination", async () => {
   const report = await matrix({ axes: { model: ["a"] }, deps: script(text("non")) });
   const json = report.toJSON();
