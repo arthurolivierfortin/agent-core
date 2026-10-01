@@ -353,6 +353,17 @@ test("report.toRunsCSV() writes one line per run: failures joined, a thrown erro
   );
 });
 
+test("report.toCSV() quotes a field that holds a lone CR (RFC 4180)", async () => {
+  let t = 0;
+  const report = await matrix({ axes: { model: ["a\rb"] }, now: () => (t += 10) });
+
+  assert.equal(
+    report.toCSV(),
+    'scenario,model,runs,passed,successRate,meanDurationMs,tokensUsed,costUsd\r\n' +
+      'aller aux reglages,"a\rb",1,1,1,50,,\r\n',
+  );
+});
+
 test("report.toJSON() copies each run's combination, failures and trace, and each line's combination", async () => {
   const report = await matrix({ axes: { model: ["a"] }, deps: script(text("non")) });
   const json = report.toJSON();
