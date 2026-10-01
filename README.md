@@ -229,7 +229,7 @@ while (state.stopReason === undefined) {
 
 ## Evaluating agents over a matrix
 
-`runMatrix`, from `./testing`, runs scenarios over the Cartesian product of axes, N runs each, in sequence, and returns a report: `runs`, one per execution with its trace, and `summary`, one line per (scenario, combination) pair with its success rate, mean duration, tokens and cost. Each run is measured by `withMetrics`; a `RateTable` prices it in dollars per million tokens, `null` for a model that is not billed. A missing usage or rate reads `null`, never `0`, and nothing folds the columns into a score (`ADR-AGENT-0007`).
+`runMatrix`, from `./testing`, runs scenarios over the Cartesian product of axes, N runs each, in sequence, and returns a report: `runs`, one per execution with its trace, and `summary`, one line per (scenario, combination) pair with its success rate, mean duration, tokens and cost. Each run is measured by `withMetrics`; a `RateTable` prices it in dollars per million tokens, `null` for a model that is not billed. A missing usage, a usage with a counter that is not an integer >= 0, or a missing rate reads `null`, never `0`, and nothing folds the columns into a score (`ADR-AGENT-0007`).
 
 `toJSON` hands back fresh plain data, so `JSON.stringify(report)` is the JSON report. `toCSV` (one line per `summary` line) and `toRunsCSV` (one line per run) follow RFC 4180 with CRLF line endings and an empty cell for `null`. `replayRun` replays a run, a failed one typically, from the responses its trace recorded, through a `FakeLLMProvider`: same agent and context, same calls and final state.
 

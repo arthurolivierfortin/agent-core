@@ -3,9 +3,10 @@
 // The package measures; it never prices on its own. Rates come from the caller (ADR-AGENT-0007).
 
 /**
- * One provider call, as measured. `tokensIn` and `tokensOut` are null when the provider reported
- * no usage: absent is not zero (ADR-AGENT-0007), and a total that counted it as 0 would
- * understate the run without saying so.
+ * One provider call, as measured. `tokensIn` and `tokensOut` are both null when the provider
+ * reported no usage, or a usage with a counter that is not an integer >= 0 (withMetrics, #46):
+ * absent is not zero (ADR-AGENT-0007), and a total that counted it as 0 would understate the run
+ * without saying so.
  */
 export type UsageRecord = {
   /** The model the call went to, as carried by `CompletionOptions.model`. */
