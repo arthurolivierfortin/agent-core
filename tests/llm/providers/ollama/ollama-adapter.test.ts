@@ -293,3 +293,54 @@ test("the default fetch (no config.fetch given) is bound, not just referenced", 
   }
   assert.equal(receiver, globalThis, "an unbound fetch would have been called with the provider instance as `this`");
 });
+
+/** A fetch that answers the text as written: no JSON.stringify, so 1e400 reaches the adapter. */
+const rawFetch = (text: string): typeof fetch =>
+  (async () => new Response(text, { status: 200 })) as unknown as typeof fetch;
+
+/** A complete() body whose two counters are JSON text, as a server writes them. */
+function countedBody(tokensIn: string, tokensOut: string): string {
+  const head = '{"model":"qwen2.5:0.5b","message":{"role":"assistant","content":"Hi!"},"done":true';
+  return head + ',"prompt_eval_count":' + tokensIn + ',"eval_count":' + tokensOut + "}";
+}
+
+/** #51: counters that are not integers >= 0. JSON reads 1e400 as Infinity, -1e400 as -Infinity. */
+const INVALID_COUNTS: [string, string, string][] = [
+  ["a negative prompt_eval_count", "-1", "3"],
+  ["a negative eval_count", "36", "-3"],
+  ["a fractional prompt_eval_count", "0.5", "3"],
+  ["an infinite eval_count", "36", "1e400"],
+  ["a negatively infinite prompt_eval_count", "-1e400", "3"],
+];
+
+for (const [why, tokensIn, tokensOut] of INVALID_COUNTS) {
+  test(`TEST-2 (issue 51) complete() leaves usage undefined on ${why}`, async () => {
+    const body = countedBody(tokensIn, tokensOut);
+    const p = new OllamaLLMProvider({ models: DECLARED, fetch: rawFetch(body) });
+    const r = await p.complete([{ role: "user", content: "hi" }], { model: MODEL });
+    assert.equal(r.content, "Hi!");
+    assert.deepEqual(r.toolCalls, []);
+    // Before #51: the counters as they came, so -1, 0.5 or Infinity reached the budget.
+    assert.equal(r.usage, undefined);
+  });
+}
+
+test("TEST-2 (issue 51) complete() keeps two zero counters as a usage of zero", async () => {
+  const body = countedBody("0", "0");
+  const p = new OllamaLLMProvider({ models: DECLARED, fetch: rawFetch(body) });
+  const r = await p.complete([{ role: "user", content: "hi" }], { model: MODEL });
+  assert.deepEqual(r.usage, { tokensIn: 0, tokensOut: 0 });
+});
+
+const NEGATIVE_COUNT_NDJSON =
+  '{"message":{"role":"assistant","content":"Su"},"done":false}\n' +
+  '{"message":{"role":"assistant","content":""},"done":true,"prompt_eval_count":-1,"eval_count":26}\n';
+
+test("TEST-2 (issue 51) stream() leaves usage undefined on a terminal chunk with a negative counter", async () => {
+  const p = new OllamaLLMProvider({ models: DECLARED, fetch: rawFetch(NEGATIVE_COUNT_NDJSON) });
+  assert.ok(p.stream, "stream must be defined");
+  const chunks = [];
+  for await (const c of p.stream!([{ role: "user", content: "count" }], { model: MODEL })) chunks.push(c);
+  assert.deepEqual(chunks.map((c) => c.done), [false, true]);
+  assert.deepEqual(chunks.map((c) => c.usage), [undefined, undefined]);
+});

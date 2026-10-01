@@ -233,3 +233,32 @@ test("TEST-2 (issue 39) a thoughtsTokenCount that is not a number leaves usage u
   // Before #39: tokensOut "57" (a string), then 5 (null counted 0), then 6 (true counted 1).
   assert.deepStrictEqual(usages, [undefined, undefined, undefined]);
 });
+
+/** #51: a usageMetadata whose counters are not all integers >= 0, and what makes it invalid. */
+const INVALID_USAGE_METADATA: [string, Record<string, number>][] = [
+  ["a negative promptTokenCount", { promptTokenCount: -1, candidatesTokenCount: 5 }],
+  ["a negative candidatesTokenCount", { promptTokenCount: 10, candidatesTokenCount: -1 }],
+  ["a negative thoughtsTokenCount", { promptTokenCount: 10, candidatesTokenCount: 5, thoughtsTokenCount: -1 }],
+  ["a fractional promptTokenCount", { promptTokenCount: 0.5, candidatesTokenCount: 5 }],
+  ["a NaN promptTokenCount", { promptTokenCount: NaN, candidatesTokenCount: 5 }],
+  ["an infinite candidatesTokenCount", { promptTokenCount: 10, candidatesTokenCount: Infinity }],
+  ["a NaN thoughtsTokenCount", { promptTokenCount: 10, candidatesTokenCount: 5, thoughtsTokenCount: NaN }],
+  ["an output sum that overflows", { promptTokenCount: 10, candidatesTokenCount: 1e308, thoughtsTokenCount: 1e308 }],
+];
+
+for (const [why, usageMetadata] of INVALID_USAGE_METADATA) {
+  test(`TEST-1 (issue 51) ${why} leaves usage undefined and keeps the answer`, () => {
+    const answer = { candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] };
+    const response = fromGeminiResponse({ ...answer, usageMetadata });
+    assert.equal(response.content, "ok");
+    // Before #51: the counters as they came, so -1, 0.5, NaN or Infinity reached the budget.
+    assert.equal(response.usage, undefined);
+  });
+}
+
+test("TEST-1 (issue 51) three zero counters are a usage of zero, not an invalid one", () => {
+  const answer = { candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] };
+  const usageMetadata = { promptTokenCount: 0, candidatesTokenCount: 0, thoughtsTokenCount: 0 };
+  const response = fromGeminiResponse({ ...answer, usageMetadata });
+  assert.deepStrictEqual(response.usage, { tokensIn: 0, tokensOut: 0 });
+});

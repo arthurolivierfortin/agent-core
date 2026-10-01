@@ -1,0 +1,30 @@
+{
+  "classe": "bug",
+  "nature": "mecanique",
+  "points": 2,
+  "nb_spec": 2,
+  "nb_db": 0,
+  "duree_estimee_s": 3909,
+  "tokens_estimes": 64000,
+  "intervalle_bas_s": 2736,
+  "intervalle_haut_s": 5864,
+  "recette_version": "v3",
+  "grille_version": "g1",
+  "echantillon": 13,
+  "modele_builder": "claude-opus-5-5",
+  "niveau_recette": "cellule",
+  "coefficient_recette": 1.58,
+  "n_recette": 20,
+  "detail": [
+    {
+      "spec_id": "SPEC-1",
+      "duree_s": 1954,
+      "motif": "SPEC avec test, base calibrée cas 1 (1 237 s/point × 2 points = 2 474 s, répartie à parts égales entre les 2 SPEC) ; v3 ×1,58, source cellule, n = 20"
+    },
+    {
+      "spec_id": "SPEC-2",
+      "duree_s": 1954,
+      "motif": "SPEC avec test, base calibrée cas 1 (part égale de 2 474 s) ; v3 ×1,58, source cellule, n = 20"
+    }
+  ]
+}

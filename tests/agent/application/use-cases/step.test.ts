@@ -9,7 +9,7 @@ import {
 import type { AgentDeps, AgentState } from "../../../../dist/agent/index.js";
 import { HeuristicTokenCounter, SlidingWindowStrategy } from "../../../../dist/context/index.js";
 import type { ContextStrategy } from "../../../../dist/context/index.js";
-import { LLMError } from "../../../../dist/llm/index.js";
+import { LLMError, OllamaLLMProvider } from "../../../../dist/llm/index.js";
 import type {
   CompletionOptions,
   LLMProvider,
@@ -766,3 +766,65 @@ test("step leaves the state it was given untouched", async () => {
   assert.deepEqual(state, before);
   assert.notEqual(next.history, state.history);
 });
+
+/**
+ * A fetch that answers bodies[i] to call i as raw text, so that 1e400 reaches the adapter as
+ * Infinity, and counts its calls. It throws once the bodies run out: the run made a call the
+ * script does not hold.
+ */
+function scriptedOllamaFetch(bodies: readonly string[]): { fetch: typeof fetch; calls: () => number } {
+  let calls = 0;
+  const scripted = async (): Promise<Response> => {
+    const body = bodies[calls];
+    calls += 1;
+    if (body === undefined) throw new Error(`scriptedOllamaFetch has no body for call ${calls}`);
+    return new Response(body, { status: 200 });
+  };
+  return { fetch: scripted as unknown as typeof fetch, calls: () => calls };
+}
+
+/** An Ollama /api/chat body, its two counters written as JSON text. */
+function ollamaChatBody(message: Record<string, unknown>, tokensIn: string, tokensOut: string): string {
+  const head = `{"model":"qwen2.5:0.5b","message":${JSON.stringify(message)},"done":true`;
+  return `${head},"prompt_eval_count":${tokensIn},"eval_count":${tokensOut}}`;
+}
+
+/** The assistant message of an Ollama turn that calls navigate on one page. */
+function ollamaNavigateCall(page: string): Record<string, unknown> {
+  const call = { function: { name: "navigate", arguments: { page } } };
+  return { role: "assistant", content: "", tool_calls: [call] };
+}
+
+/** #51: first-call counters that are not integers >= 0. Before the fix: tokensUsed -1, then NaN. */
+const INVALID_FIRST_COUNTS: [string, string, string][] = [
+  ["a negative counter", "5", "-20"],
+  ["two counters that sum to NaN", "1e400", "-1e400"],
+];
+
+for (const [why, tokensIn, tokensOut] of INVALID_FIRST_COUNTS) {
+  test(`TEST-3 (issue 51) the token bound still lands the run after ${why} from Ollama`, async () => {
+    const scripted = scriptedOllamaFetch([
+      ollamaChatBody(ollamaNavigateCall("reglages"), tokensIn, tokensOut),
+      ollamaChatBody(ollamaNavigateCall("profil"), "6", "6"),
+      ollamaChatBody({ role: "assistant", content: "je conclus ici" }, "1", "1"),
+    ]);
+    const llm = new OllamaLLMProvider({
+      models: [{ id: "qwen2.5:0.5b", supportsTools: true }],
+      fetch: scripted.fetch,
+    });
+    const deps: AgentDeps = {
+      agent: agentWith([navigateTool()]),
+      llm,
+      context: wideContext(),
+      budget: { maxTokens: 10 },
+    };
+
+    const state = await driveWithStep(deps, "amene-moi aux reglages");
+
+    // The invalid call counts 0, 6 + 6 then reaches the bound, and the landing adds 1 + 1.
+    assert.equal(state.stopReason, "budget");
+    assert.equal(state.tokensUsed, 14);
+    assert.equal(state.lastContent, "je conclus ici");
+    assert.equal(scripted.calls(), 3);
+  });
+}
