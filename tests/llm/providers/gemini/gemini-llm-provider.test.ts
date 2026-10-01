@@ -334,11 +334,31 @@ test("a 404 that carries no Gemini error points at baseURL", async () => {
   assert.equal(double.count(), 1);
 });
 
-// Fixed as it is (R1 of #26): the body is not empty, only its error.message is.
-test("an error body whose error.message is empty is labelled (empty body)", async () => {
-  const double = respondingFetch(400, JSON.stringify({ error: { code: 400, message: "", status: "INVALID_ARGUMENT" } }));
-  await expectFailure(double.fetch, "API_ERROR", `Gemini 400 INVALID_ARGUMENT from ${ENDPOINT}: (empty body)`);
+// #32, correcting R1 of #26: an empty error.message is not an empty body; a missing one quotes the body.
+test("an error body whose error.message is empty is labelled (empty error message), not (empty body)", async () => {
+  const emptyMessage = { error: { code: 400, message: "", status: "INVALID_ARGUMENT" } };
+  const double = respondingFetch(400, JSON.stringify(emptyMessage), { "retry-after": "7" });
+  const badRequest = await expectFailure(
+    double.fetch,
+    "API_ERROR",
+    `Gemini 400 INVALID_ARGUMENT from ${ENDPOINT}: (empty error message)`,
+  );
   assert.equal(double.count(), 1);
+  assert.equal(badRequest.status, 400);
+  assert.equal(badRequest.retryAfterMs, 7000);
+  const emptyNotFound = { error: { code: 404, message: "", status: "NOT_FOUND" } };
+  const noModel = await expectFailure(
+    respondingFetch(404, JSON.stringify(emptyNotFound)).fetch,
+    "MODEL_NOT_FOUND",
+    `Gemini has no model 'gemini-2.5-flash' (404 NOT_FOUND from ${ENDPOINT}): (empty error message)`,
+  );
+  assert.equal(noModel.status, 404);
+  const noMessage = JSON.stringify({ error: { code: 400, status: "INVALID_ARGUMENT" } });
+  await expectFailure(
+    respondingFetch(400, noMessage).fetch,
+    "API_ERROR",
+    `Gemini 400 INVALID_ARGUMENT from ${ENDPOINT}: ${noMessage}`,
+  );
 });
 
 test("an error body that cannot be read is an API_ERROR with the status", async () => {
