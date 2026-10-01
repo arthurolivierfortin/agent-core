@@ -15,6 +15,9 @@ function splitLines(text) {
   return text.split(/\r?\n/);
 }
 
+// Forme d'une clé d'API Google : aucun fichier versionné n'en porte une.
+const GOOGLE_KEY_SHAPE = /AIza[0-9A-Za-z_-]{35}/;
+
 function checkEnvExample(relativePath, expectedNamed) {
   const envLines = splitLines(readRepoFile(relativePath));
   assert.deepEqual(
@@ -28,10 +31,11 @@ function checkEnvExample(relativePath, expectedNamed) {
     `${relativePath} : lignes avec = inattendues`,
   );
   assert.deepEqual(
-    envLines.filter((line) => line.includes("localhost") || line.includes("qwen")),
+    envLines.filter((line) => ["localhost", "qwen", "gemini-", "googleapis"].some((value) => line.includes(value))),
     [],
     `${relativePath} : valeur par défaut recopiée`,
   );
+  assert.doesNotMatch(envLines.join("\n"), GOOGLE_KEY_SHAPE, `${relativePath} : forme de clé d'API Google`);
 }
 
 function leadingQuoteBlock(text) {
@@ -67,7 +71,10 @@ test("TEST-1 .gitignore versionne docs/specs et docs/plans", () => {
 });
 
 test("TEST-2 .env.example nomme les variables sans valeur", () => {
-  checkEnvExample(".env.example", ["# LLM_PROVIDER=", "# OLLAMA_HOST=", "# OLLAMA_MODEL="]);
+  checkEnvExample(".env.example", ["# LLM_PROVIDER=", "# OLLAMA_HOST=", "# OLLAMA_MODEL=", "# GEMINI_API_KEY=", "# GEMINI_MODEL="]);
+  const envExample = readRepoFile(".env.example");
+  assert.ok(envExample.includes("Setting up Gemini"), ".env.example : renvoi à Setting up Gemini absent");
+  assert.ok(envExample.includes("docs/rapport-h2.md"), ".env.example : renvoi à docs/rapport-h2.md absent");
 });
 
 test("TEST-3 examples/web-chat/.env.example nomme les variables sans valeur", () => {
@@ -281,9 +288,6 @@ test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-ca
     "src/metrics/application/use-cases/with-metrics.ts introuvable",
   );
 });
-
-// Forme d'une clé d'API Google : aucun fichier versionné n'en porte une.
-const GOOGLE_KEY_SHAPE = /AIza[0-9A-Za-z_-]{35}/;
 
 test("TEST-3 (issue 26) le test d'intégration Gemini est ignoré sans GEMINI_INTEGRATION=1", () => {
   const file = "tests/integration/gemini.integration.test.ts";
