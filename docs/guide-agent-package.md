@@ -71,10 +71,14 @@ Tools are **opt-in**. An agent receives exactly the tools it is passed, nothing 
 
 ```
 src/
+  core/                         # shared kernel: the vocabulary llm/ and tools/ both import (ADR-AGENT-0012)
+    models/index.ts               JSONSchemaType, JSONSchemaProperty, ToolSchema
+    index.ts
+
   llm/                          # peer framework, provider-agnostic
-    models/index.ts               Message, LLMResponse, ToolCall, ToolResult, LLMError
+    models/index.ts               Message, LLMResponse, ToolCall, ToolDefinition, LLMError
     interfaces/llm-provider.ts
-    services/response-parser.ts   pure
+    services/token-count.ts       pure: isTokenCount, served by no barrel
     providers/
       ollama/ollama-llm-provider.ts    OllamaLLMProvider, a CLASS (real I/O)
       gemini/gemini-llm-provider.ts    GeminiLLMProvider, a CLASS (real I/O)
@@ -91,22 +95,23 @@ src/
     interfaces/token-counter.ts
     strategies/
       sliding-window/             V1: SlidingWindowStrategy and its pure helpers
-      memory/                     V3, plugs in here without touching the agent
+      memory/                     [V3] plugs in here without touching the agent
     infrastructure/heuristic-token-counter.ts
     index.ts
 
   tools/
-    models/index.ts               ToolCall, ToolResult, ToolSchema
+    models/index.ts               ToolOutcome, ToolResult (ToolSchema lives in core/)
     interfaces/tool.ts
     application/use-cases/dispatch-tool.ts    chains record → [authorize] → execute
-    infrastructure/               read-file.ts, write-file.ts, list-files.ts → ./tools branch
+    application/use-cases/to-tool-definition.ts   Tool → ToolDefinition shown to the model
+    infrastructure/index.ts       ./tools branch, empty for now: read-file.ts, write-file.ts, list-files.ts land here
     index.ts
 
   metrics/                      # peer framework
     models/index.ts               UsageRecord, MetricsTotal, RateTable
-    interfaces/metrics-collector.ts
     services/aggregate.ts         pure
-    infrastructure/collector.ts
+    application/use-cases/metrics-collector.ts   MetricsCollector, a CLASS
+    application/use-cases/with-metrics.ts        withMetrics, an LLMProvider decorator (see below)
     index.ts
 
   agent/                        # the app
@@ -116,7 +121,7 @@ src/
       dtos/index.ts               AgentDeps, AgentInput, AgentResult, AgentState
       use-cases/step.ts           one iteration; a function, but it calls ports
       use-cases/agentic-llm.ts    AgenticLLM, a CLASS (public API)
-      use-cases/voice-agentic-llm.ts   VoiceAgenticLLM (V4)
+      use-cases/voice-agentic-llm.ts   VoiceAgenticLLM [V4]
     testing/                      the agent test harness (→ ./testing)
       fake-app.ts                   shared-state simulator (≠ mock)
       define-scenario.ts
@@ -128,14 +133,16 @@ src/
     index.ts
 
   testing/                      # ./testing branch: aggregates each framework's testing/
-    index.ts                      re-exports llm/testing (+ agent/testing when it lands)
+    index.ts                      re-exports llm/testing and agent/testing
 ```
+
+This tree shows every folder of `src/` that holds code, not every file: the exhaustive map is the Full tree of `ROADMAP.md`. Every file and folder it names exists in `src/`, except the lines tagged `[V3]` or `[V4]`, which have not landed yet; `scripts/repo-conventions.test.mjs` checks both rules.
 
 `metrics/application/use-cases/with-metrics.ts`: `withMetrics`, a decorator that implements `LLMProvider` and records every resolved call in a `MetricsCollector`. It lives with the metrics it feeds.
 
 `context/` is a **framework in its own right**, not a subfolder of `agent/`: many implementations serve one contract, so they are nested one folder each. Sliding window and memory differ by **algorithm**, hence `strategies/` and the port `ContextStrategy` (`ADR-AGENT-0016`).
 
-`testing/` is **not** a top-level framework. Shipped test tooling co-locates under each framework's own `testing/` subfolder (`llm/testing/`, later `agent/testing/`) because it is that framework's functionality, not a cross-cutting concern. The top-level `testing/index.ts` only **aggregates** them behind the one `./testing` subpath. A framework's production barrel never exports its `testing/`, so the tooling reaches consumers through `./testing` only, never through `.` or `./llm`.
+`testing/` is **not** a top-level framework. Shipped test tooling co-locates under each framework's own `testing/` subfolder (`llm/testing/`, `agent/testing/`) because it is that framework's functionality, not a cross-cutting concern. The top-level `testing/index.ts` only **aggregates** them behind the one `./testing` subpath. A framework's production barrel never exports its `testing/`, so the tooling reaches consumers through `./testing` only, never through `.` or `./llm`.
 
 ### Internal layers per framework
 

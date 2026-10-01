@@ -365,6 +365,40 @@ test("TEST-1 (issue 56) ROADMAP : la carte nomme chaque fichier .ts de src/ et s
   assert.ok(collector?.line.includes("MetricsCollector"), "ROADMAP.md : ligne metrics/application/use-cases/metrics-collector.ts sans MetricsCollector");
 });
 
+// Paragraphe du guide sous son arborescence (#56), coupé en lignes de 100 colonnes au plus.
+const GUIDE_TREE_SENTENCE =
+  "This tree shows every folder of `src/` that holds code, not every file: the exhaustive map" +
+  " is the Full tree of `ROADMAP.md`. Every file and folder it names exists in `src/`, except the" +
+  " lines tagged `[V3]` or `[V4]`, which have not landed yet; `scripts/repo-conventions.test.mjs`" +
+  " checks both rules.";
+
+test("TEST-2 (issue 56) le guide ne nomme que des chemins existants et montre chaque dossier de src/ qui contient du code", () => {
+  const guide = readRepoFile("docs/guide-agent-package.md");
+  const { invalid, entries } = parseSrcTree(fencedBlockAfter(guide, "### Directory tree"));
+  assert.deepEqual(invalid, [], "guide : lignes de l'arborescence invalides");
+  assert.deepEqual(
+    entries
+      .filter(({ path, kind, tagged }) => !tagged && kind !== "elided" && !existsSync(new URL("../src/" + path, import.meta.url)))
+      .map(({ path }) => path),
+    [],
+    "guide : l'arborescence nomme des chemins absents de src/",
+  );
+  const shown = new Set();
+  for (const { path, kind } of entries) {
+    if (kind === "dir") shown.add(path);
+    for (let at = path.indexOf("/"); at !== -1; at = path.indexOf("/", at + 1)) shown.add(path.slice(0, at + 1));
+  }
+  const folders = [...new Set(srcTsFiles().map((file) => file.slice(0, file.lastIndexOf("/") + 1)))].filter((folder) => folder !== "");
+  assert.deepEqual(
+    folders.filter((folder) => !shown.has(folder)),
+    [],
+    "guide : dossiers de src/ qui contiennent du code, absents de l'arborescence",
+  );
+  assert.ok(splitLines(guide).includes(GUIDE_TREE_SENTENCE), "guide : paragraphe de la règle de l'arborescence absent ou modifié");
+  assert.ok(!guide.includes("when it lands"), "guide : « when it lands » encore présent");
+  assert.ok(!guide.includes("later `agent/testing/`"), "guide : « later `agent/testing/` » encore présent");
+});
+
 // Délai du fils de TEST-3 (issue 26), qui dure environ 0,3 s : un fils bloqué fait échouer
 // ce test au lieu de figer la suite (#31).
 const CHILD_TIMEOUT_MS = 60_000;
