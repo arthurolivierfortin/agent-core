@@ -1,14 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GeminiLLMProvider, OllamaLLMProvider } from "../../dist/index.js";
+import type { LLMProvider, LLMResponse, Usage } from "../../dist/index.js";
 import * as runner from "./run-report.ts";
 
-// Runner of the H2 report (#33): docs/specs/2026-09-30-h2-report-runner-design.md. No factory is called, no
-// network reached, no .env read: env and rates are literals, never data/rates.json. The namespace import
-// lets an export added by a later commit fail its own test, not the whole file.
+// Runner of the H2 report (#33, #42): docs/specs/2026-09-30-h2-report-runner-design.md and
+// docs/specs/2026-09-30-h2-report-launch-design.md. No real provider is built, no network reached, no .env
+// read: the real run gets the doubles of `scripted`, fetch replaced by a counter; env and rates are literals,
+// never data/rates.json. The namespace import lets an export added later fail its own test, not the file.
 
 test("TEST-2 (issue 33) defaultProviders declares the given models on Ollama and Gemini", () => {
   const { local, hosted } = runner.defaultProviders({ ollamaModel: "local-x", geminiModel: "hosted-x" });
@@ -22,8 +24,9 @@ const KEY = "sentinel-value-not-a-key";
 const ENV = { GEMINI_API_KEY: KEY };
 const MODELS = ["--ollama-model", "local-x", "--gemini-model", "hosted-x"];
 const BASE = ["--cap-usd", "1", ...MODELS];
-// Dates the default --out: no test reads the clock.
+// TODAY dates the default --out, NOW is the clock of the real run (durations, TRUNCATED.txt): no test reads the clock.
 const TODAY = new Date(2026, 8, 30);
+const NOW = new Date("2026-09-30T12:00:00.000Z");
 const LOCAL_RATE = { usdPerMillionTokensIn: 0, usdPerMillionTokensOut: 0 };
 const HOSTED_RATE = { usdPerMillionTokensIn: 0.3, usdPerMillionTokensOut: 2.5 };
 
@@ -36,11 +39,15 @@ function ratesText(local: object | null = LOCAL_RATE, hosted: object | null = HO
 }
 const RATES_TEXT = ratesText();
 
-/** Replaces the rate text or the env; `setup` prepares the temporary repo before the run. */
-type Overrides = { readonly ratesText?: string; readonly env?: Record<string, string>; readonly setup?: (repo: string) => void };
+/** Replaces the rate text, the env, the factory or home; `setup` prepares the temporary repo, `after` reads it. */
+type Overrides = {
+  readonly ratesText?: string; readonly env?: Record<string, string>; readonly setup?: (repo: string) => void;
+  readonly providers?: (repo: string) => runner.ReportProviders; readonly home?: (repo: string) => string;
+  readonly after?: (repo: string) => void;
+};
 type Outcome = { code: number; stdout: string; stderr: string; factoryCalls: number };
 
-/** runReport on a new temporary repo, removed after, streams captured; the factory counts its calls and throws. */
+/** runReport on a new temporary repo, removed after, streams captured; the factory counts its calls, then delegates or throws. */
 async function report(argv: readonly string[] | ((repo: string) => readonly string[]), overrides: Overrides = {}): Promise<Outcome> {
   const repo = mkdtempSync(join(tmpdir(), "h2-report-"));
   const outcome: Outcome = { code: -1, stdout: "", stderr: "", factoryCalls: 0 };
@@ -51,12 +58,18 @@ async function report(argv: readonly string[] | ((repo: string) => readonly stri
       env: overrides.env ?? ENV,
       ratesText: overrides.ratesText ?? RATES_TEXT,
       repo,
-      home: repo,
+      home: overrides.home?.(repo) ?? repo,
       stdout: { write: (text: string) => (outcome.stdout += text) },
       stderr: { write: (text: string) => (outcome.stderr += text) },
       today: TODAY,
-      providers: () => { throw new Error(`#33 must not call the provider factory (call ${++outcome.factoryCalls})`); },
+      now: () => NOW,
+      providers: () => {
+        outcome.factoryCalls++;
+        if (overrides.providers === undefined) throw new Error("this test gives no provider factory");
+        return overrides.providers(repo);
+      },
     });
+    overrides.after?.(repo);
     return outcome;
   } finally {
     rmSync(repo, { recursive: true, force: true });
@@ -149,16 +162,13 @@ test("TEST-5 (issue 33) a local rate that is null is announced as rate null", as
   assert.ok(result.stdout.split("\n").includes(line), result.stdout);
 });
 
-const REAL_RUN_REFUSAL =
-  "refusing the real run: it is delivered by #42 (capped matrix, safe CSV writing); nothing was called, rerun with --dry-run\n";
-
-/** report(argv) with globalThis.fetch replaced by a counter that throws, restored in a finally. */
-async function reportWithoutNetwork(argv: readonly string[]): Promise<Outcome & { fetchCalls: number }> {
+/** report(argv, overrides) with globalThis.fetch replaced by a counter that throws, restored in a finally. */
+async function reportWithoutNetwork(argv: readonly string[], overrides: Overrides = {}): Promise<Outcome & { fetchCalls: number }> {
   const original = globalThis.fetch;
   let fetchCalls = 0;
   globalThis.fetch = (async () => { throw new Error(`no network in these tests (call ${++fetchCalls})`); }) as unknown as typeof fetch;
   try {
-    return { ...(await report(argv)), fetchCalls };
+    return { ...(await report(argv, overrides)), fetchCalls };
   } finally {
     globalThis.fetch = original;
   }
@@ -168,12 +178,6 @@ test("TEST-6 (issue 33) --dry-run: the announcement, the dry run line, code 0, n
   const result = await reportWithoutNetwork([...ANNOUNCED, "--dry-run"]);
   const stdout = `${ANNOUNCEMENT}dry run: no provider built, no call made\n`;
   assert.deepEqual(result, { code: 0, stdout, stderr: "", factoryCalls: 0, fetchCalls: 0 });
-  assert.ok(!(result.stdout + result.stderr).includes(KEY));
-});
-
-test("TEST-6 (issue 33) without --dry-run: the same announcement, the real run refused, code 1", async () => {
-  const result = await reportWithoutNetwork(ANNOUNCED);
-  assert.deepEqual(result, { code: 1, stdout: ANNOUNCEMENT, stderr: REAL_RUN_REFUSAL, factoryCalls: 0, fetchCalls: 0 });
   assert.ok(!(result.stdout + result.stderr).includes(KEY));
 });
 
@@ -188,4 +192,65 @@ test("TEST-2 (issue 42) an --out under docs/demo is refused when only the case o
 test("TEST-3 (issue 42) the announcement names the Ollama host, from OLLAMA_HOST or the default", async () => {
   const result = await report([...ANNOUNCED, "--dry-run"], { env: { ...ENV, OLLAMA_HOST: "http://ollama.test:11434" } });
   assert.ok(result.stdout.split("\n").includes("local host: http://ollama.test:11434 (from OLLAMA_HOST)"), result.stdout);
+});
+
+const COMPLETE = ["--cap-usd", "5", "--runs", "2", ...MODELS, "--out", "out/"];
+const LOCAL_USAGE: Usage = { tokensIn: 10, tokensOut: 5 };
+// 0.5 USD exactly per call at the rate of hosted-x (2.5 USD per million tokens out).
+const HOSTED_USAGE: Usage = { tokensIn: 0, tokensOut: 200_000 };
+
+/** Declares the one model `id`, never streams: navigate to reglages on an odd call, land on an even one; throws what `fail` returns. */
+function scripted(id: string, usage: Usage, fail: (call: number) => unknown = () => undefined): LLMProvider {
+  let calls = 0;
+  return {
+    id: "scripted",
+    supportsStreaming: () => false,
+    models: () => [{ id, supportsTools: true }],
+    complete: async (): Promise<LLMResponse> => {
+      const error = fail(++calls);
+      if (error !== undefined) throw error;
+      if (calls % 2 === 0) return { content: "Vous etes aux reglages.", toolCalls: [], usage };
+      return { content: "", toolCalls: [{ id: `call-${calls}`, name: "navigate", arguments: { page: "reglages" } }], usage };
+    },
+  };
+}
+/** The factory of one test: local-x then hosted-x, built once, never a real provider. */
+const doubles = (local = scripted("local-x", LOCAL_USAGE), hosted = scripted("hosted-x", HOSTED_USAGE)) =>
+  (): runner.ReportProviders => ({ local, hosted });
+
+/** { name: text } of the files in <repo>/<out>, or null when that folder does not exist. */
+function written(repo: string, out: string): Record<string, string> | null {
+  const dir = join(repo, out);
+  if (!existsSync(dir)) return null;
+  return Object.fromEntries(readdirSync(dir).map((name) => [name, readFileSync(join(dir, name), "utf8")]));
+}
+
+/** reportWithoutNetwork, plus the files the run left in its --out, read before the repo is removed. */
+async function launched(argv: readonly string[], overrides: Overrides = {}) {
+  let files: Record<string, string> | null = null;
+  const out = argv[argv.indexOf("--out") + 1];
+  const result = await reportWithoutNetwork(argv, { ...overrides, after: (repo) => { files = written(repo, out); } });
+  return { ...result, files: files as Record<string, string> | null };
+}
+
+test("TEST-4 (issue 42) the real run calls the given factory once, never fetch, and writes both CSV", async () => {
+  const result = await launched(COMPLETE, { providers: doubles() });
+  assert.deepEqual([result.code, result.stderr, result.factoryCalls, result.fetchCalls], [0, "", 1, 0]);
+  assert.ok(result.stdout.endsWith("H2 report written: summary.csv, runs.csv in out/\n"), result.stdout);
+  assert.deepEqual(Object.keys(result.files ?? {}).sort(), ["runs.csv", "summary.csv"]);
+  assert.equal(result.files?.["summary.csv"], "scenario,model,runs,passed,successRate,meanDurationMs,tokensUsed,costUsd\r\n" +
+    "aller aux reglages,local-x,2,2,1,0,60,0\r\naller aux reglages,hosted-x,2,2,1,0,800000,2\r\n");
+  assert.match(result.files?.["runs.csv"] ?? "", /^(?:[^\r\n]*\r\n){5}$/);
+  const announced = await launched(ANNOUNCED, { providers: doubles() });
+  assert.deepEqual([announced.stdout.slice(0, ANNOUNCEMENT.length), announced.factoryCalls], [ANNOUNCEMENT, 1]);
+});
+
+test("TEST-4 (issue 42) 'wx': a summary.csv created during the run is kept, EEXIST, code 1", async () => {
+  const hold = (repo: string) => scripted("local-x", LOCAL_USAGE, (call) => {
+    if (call === 1) { mkdirSync(join(repo, "out")); writeFileSync(join(repo, "out", "summary.csv"), "held"); }
+  });
+  const result = await launched(COMPLETE, { providers: (repo) => ({ local: hold(repo), hosted: scripted("hosted-x", HOSTED_USAGE) }) });
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /EEXIST/);
+  assert.deepEqual(result.files, { "summary.csv": "held" });
 });
