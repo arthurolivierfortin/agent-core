@@ -185,6 +185,13 @@ async function launch(io: ReportIO, args: ReportArgs, rates: RateTable): Promise
       : [[SUMMARY_TRUNCATED, report.toCSV()], [RUNS_TRUNCATED, report.toRunsCSV()], [MARK, truncationMark(cause, guard, args, clock())]];
     // Before any check and any write: the texts as they will be written.
     const files = texts.map(([name, text]) => [name, scrubMachinePaths(text, io.repo, io.home)] as const);
+    // After the paths are replaced, before any folder is made; the message names files, never the value.
+    const key = (io.env.GEMINI_API_KEY ?? "").trim();
+    const leaking = key === "" ? [] : files.filter(([, text]) => text.includes(key)).map(([name]) => name);
+    if (leaking.length > 0) {
+      io.stderr.write(`refusing to write: the value of GEMINI_API_KEY appears in ${leaking.join(", ")}; nothing was written\n`);
+      return 1;
+    }
     const target = resolve(io.repo, args.out);
     mkdirSync(target, { recursive: true });
     for (const [name, text] of files) writeFileSync(join(target, name), text, { flag: "wx" });

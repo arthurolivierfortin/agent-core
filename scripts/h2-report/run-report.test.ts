@@ -298,3 +298,22 @@ for (const [cause, argv, overrides, spent, cap] of TRUNCATIONS) {
     assert.ok(result.files?.["runs.truncated.csv"].includes("capGuard refused a call to 'hosted-x': 2.5 USD spent reached the cap of 2.5 USD"));
   });
 }
+
+// hosted-x stands for the key: it is the hosted model's name, so every CSV holds it.
+const LEAKS: ReadonlyArray<readonly [string, readonly string[], Overrides, string]> = [
+  ["a key trimmed", COMPLETE, { env: { GEMINI_API_KEY: "  hosted-x  " }, providers: doubles() }, "summary.csv, runs.csv"],
+  ["a key in a local error", COMPLETE, {
+    providers: doubles(scripted("local-x", LOCAL_USAGE, (call) => (call === 1 ? new Error(`leaked ${KEY}`) : undefined))),
+  }, "runs.csv"],
+  ["a key in a truncated report", ANNOUNCED, { env: { GEMINI_API_KEY: "hosted-x" }, providers: doubles() },
+    "summary.truncated.csv, runs.truncated.csv, TRUNCATED.txt"],
+];
+
+for (const [label, argv, overrides, names] of LEAKS) {
+  test(`TEST-7 (issue 42) ${label}: nothing written, the files named, never the value`, async () => {
+    const result = await launched(argv, overrides);
+    const refusal = `refusing to write: the value of GEMINI_API_KEY appears in ${names}; nothing was written\n`;
+    assert.deepEqual([result.code, result.stderr, result.files], [1, refusal, null]);
+    assert.ok(!result.stderr.includes((overrides.env ?? ENV).GEMINI_API_KEY.trim()));
+  });
+}
