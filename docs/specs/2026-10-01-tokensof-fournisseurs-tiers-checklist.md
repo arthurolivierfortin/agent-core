@@ -13,9 +13,21 @@ Spécification : docs/specs/2026-10-01-tokensof-fournisseurs-tiers-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
-(vide à la rédaction)
+- [H] **R-1** (spécification) · Import hors barrel entre frameworks (D2) : `step.ts` importe `src/llm/services/token-count.ts`, servi par aucun barrel ; le jour où `llm` devient un paquet distinct (ADR-AGENT-0012:56), il faudra l'exporter ou le copier. Sans effet aujourd'hui (même paquet, compilé par `tsc` sans bundler).
+- [H] **R-2** (spécification) · Trois définitions de la règle, inchangées en nombre : `src/llm/services/token-count.ts` (adaptateurs et boucle), `src/metrics/application/use-cases/with-metrics.ts:54-57` (#46), `scripts/h2-report/cap-guard.ts:39-42` (#41).
+- [H] **R-4** (spécification) · `usage: null` d'un fournisseur JavaScript : hors du type `Usage | undefined`, non testé ; la lecture `usage?.tokensIn` le traite comme absent, alors que l'ancien `tokensOf` levait un `TypeError`. Pas un engagement de #60.
+- [H] **R-5** (spécification) · Débordement du cumul : `state.tokensUsed + tokensOf(...)` n'est pas contrôlé ; l'atteindre demande un cumul de comptes valides voisin de `1.8e308`, et il ferait alors tomber le budget (`Infinity >= maxTokens`), sens sûr.
+- [H] **P1** · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de SPEC-1 (spécification ; précédent P1 de #20, #35, #39, #41, #46, #51).
+- [H] **P2** · Issue relue par le planificateur (`gh issue view 60`) : le corps correspond mot pour mot à la citation de la spécification ; R-3 de la spécification est levée. Le titre de l'issue (« fix(agent): tokensOf contrôle aussi l'usage des fournisseurs tiers ») et le sujet du commit (`fix(agent): borner tokensOf aux compteurs d'usage valides`) partagent type et scope.
+- [H] **P3** · TSDoc de `Budget.maxTokens`, `AgentState.tokensUsed` et `AgentResult.tokensUsed` repliés sous 100 colonnes ; les phrases exigées par la checklist s'y trouvent mot pour mot après jointure des lignes (contrôle 1.4.4). Le TSDoc de `Budget.maxTokens` et celui de `AgentState.tokensUsed` passent d'une ligne `/** … */` à un bloc de quatre lignes.
+- [H] **P4** · Tests : libellés des lignes de table et titres choisis par ce plan, en anglais comme leurs voisins, préfixés `TEST-1 (issue 60)`, sans `#` ; table typée `ReadonlyArray<readonly [string, Usage]>` comme `tests/metrics/application/use-cases/with-metrics.test.ts:166` ; la ligne `"7"` écrite `as unknown as Usage` (spécification).
+- [H] **P5** · Aucun test commité ne verrouille les nouvelles phrases TSDoc ni l'en-tête de `token-count.ts` (la spécification n'en demande pas) ; leur présence est prouvée par les contrôles 1.4.4 et 1.4.5, à la PR seulement.
+- [H] **P6** · Sorties observées par le planificateur sur une sonde (`git archive` de 4ab989d dans `docs/plans/.probe-60/`, compilée par le `tsc` du `node_modules/` du worktree, supprimée ensuite), pas sur le worktree lui-même ; un écart de totaux à la tâche 0 se traite comme dit en 0.2.
+- [H] **P7** · Taille : +95 −7 mesurées hors `docs/` et `*.md` (102 lignes) contre environ 90 estimées (fourchette 70 à 130), sous le seuil de 400, aucune dérogation.
+- [H] **P8** · Type et scope `fix(agent)` (D7) ; correction de comportement sans changement de signature, relève d'un correctif (patch) ; `package.json` (version) n'est pas touché.
+- [H] **Node** · Node local ≥ 22.18 (retrait de types sans drapeau), constaté v22.19.0.
