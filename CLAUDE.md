@@ -12,7 +12,7 @@ gates:
 ux_verifier: disabled
 derogations:
   - rule: core/langue
-    reason: "le corps des documents hérités de NATHAN et copiés le 2026-09-29 reste en anglais, sans traduction, mises à jour comprises (README.md, ROADMAP.md, docs/guide-agent-package.md, docs/decisions/, docs/conventions/, docs/theory/, docs/schema/, docs/plans/2026-07-21-v1-decoupage-pr.md) ; leurs notes d'origine et tout nouveau document sont en français ; décision d'Arthur du 2026-09-30 sur #7"
+    reason: "le corps des documents hérités de NATHAN et copiés le 2026-09-29 reste en anglais, sans traduction, mises à jour comprises (README.md, ROADMAP.md, docs/guide-agent-package.md, docs/decisions/, docs/conventions/, docs/theory/, docs/schema/, docs/plans/2026-07-21-v1-decoupage-pr.md, .env.example, examples/web-chat/.env.example) ; leurs notes d'origine et tout nouveau document sont en français ; décision d'Arthur du 2026-09-30 sur #7"
     revue_le: 2026-12-31
 -->
 
