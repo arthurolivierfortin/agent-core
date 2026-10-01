@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { loadRateFile } from "./rates.ts";
+import { loadRateEntries, loadRateFile } from "./rates.ts";
 
 // Rate file of the H2 report (#20): docs/specs/2026-09-30-h2-report-guards-design.md.
 
@@ -70,4 +70,26 @@ test("TEST-4 (issue 20) data/rates.json loads: dated, sourced, local model at 0,
   const hosted = table["gemini-2.5-flash"];
   assert.ok(hosted === null || (hosted.usdPerMillionTokensIn > 0 && hosted.usdPerMillionTokensOut > 0), JSON.stringify(hosted));
   assert.doesNotMatch(text, /AIza[0-9A-Za-z_-]{35}/);
+});
+
+// Rate entries of the H2 report (#33): docs/specs/2026-09-30-h2-report-runner-design.md.
+const LOCAL_ENTRY = { rate: null, effectiveFrom: "2026-09-29", source: "local" };
+
+test("TEST-1 (issue 33) loadRateEntries keeps effectiveFrom and source; loadRateFile still drops them", () => {
+  const text = JSON.stringify({ "local-model": LOCAL_ENTRY, "hosted-model": ENTRY });
+  assert.deepEqual(loadRateEntries(text), { "local-model": LOCAL_ENTRY, "hosted-model": ENTRY });
+  assert.deepEqual(loadRateFile(text), { "local-model": null, "hosted-model": PRICED });
+});
+
+test("TEST-1 (issue 33) both functions refuse an entry without source with the same message", () => {
+  for (const load of [loadRateEntries, loadRateFile]) {
+    assert.throws(() => load(withEntry({ source: undefined })), { message: "rates['m']: missing field 'source'" });
+  }
+});
+
+test("TEST-1 (issue 33) a __proto__ key stays an own entry of loadRateEntries", () => {
+  const entries = loadRateEntries(`{"__proto__":${JSON.stringify(ENTRY)}}`);
+  assert.equal(Object.hasOwn(entries, "__proto__"), true);
+  assert.equal(Object.getPrototypeOf(entries), Object.prototype);
+  assert.deepEqual(Object.getOwnPropertyDescriptor(entries, "__proto__")?.value, ENTRY);
 });

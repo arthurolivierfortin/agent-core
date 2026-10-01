@@ -2,6 +2,9 @@
 // Checks data/rates.json before any network call: the first defect throws, naming the entry and the field.
 import type { Rate, RateTable } from "../../dist/index.js";
 
+/** One checked entry of data/rates.json (#33): its rate, or null, with its effective date and its source. */
+export type RateEntry = { readonly rate: Rate | null; readonly effectiveFrom: string; readonly source: string };
+
 const ENTRY_FIELDS = ["rate", "effectiveFrom", "source"];
 const PRICE_FIELDS = ["usdPerMillionTokensIn", "usdPerMillionTokensOut"];
 // The only source under which a price may be 0 (rule R1); start-guard.ts refuses a hosted price of 0 (R2).
@@ -20,7 +23,7 @@ function checkFields(value: Record<string, unknown>, fields: readonly string[], 
   }
 }
 
-function isRealDate(value: unknown): boolean {
+function isRealDate(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(value + "T00:00:00Z");
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
@@ -44,7 +47,7 @@ function readRate(value: unknown, where: string, source: string): Rate | null {
   return { usdPerMillionTokensIn, usdPerMillionTokensOut };
 }
 
-function readEntry(id: string, entry: unknown): Rate | null {
+function readEntry(id: string, entry: unknown): RateEntry {
   if (id === "") throw new Error("rates: a model id must not be empty");
   const where = `rates['${id}']`;
   if (!isObject(entry)) throw new Error(`${where}: must be an object`);
@@ -53,14 +56,15 @@ function readEntry(id: string, entry: unknown): Rate | null {
   if (typeof entry.source !== "string" || entry.source.trim() === "") {
     throw new Error(`${where}.source: must be a non-empty string`);
   }
-  return readRate(entry.rate, `${where}.rate`, entry.source);
+  const rate = readRate(entry.rate, `${where}.rate`, entry.source);
+  return { rate, effectiveFrom: entry.effectiveFrom, source: entry.source };
 }
 
 /**
- * Reads the text of data/rates.json into a new RateTable built by Object.fromEntries: a `__proto__`
- * key stays an own entry. effectiveFrom and source are checked, then dropped: RateTable does not carry them.
+ * Reads the text of data/rates.json into a new record built by Object.fromEntries, one new RateEntry
+ * per model: a `__proto__` key stays an own entry. Same checks, order and messages as loadRateFile.
  */
-export function loadRateFile(text: string): RateTable {
+export function loadRateEntries(text: string): Readonly<Record<string, RateEntry>> {
   let root: unknown;
   try {
     root = JSON.parse(text);
@@ -69,4 +73,12 @@ export function loadRateFile(text: string): RateTable {
   }
   if (!isObject(root)) throw new Error("rates: the root must be an object keyed by model id");
   return Object.fromEntries(Object.entries(root).map(([id, entry]) => [id, readEntry(id, entry)]));
+}
+
+/**
+ * Reads the text of data/rates.json into a new RateTable built by Object.fromEntries: a `__proto__`
+ * key stays an own entry. effectiveFrom and source are checked, then dropped: loadRateEntries keeps them.
+ */
+export function loadRateFile(text: string): RateTable {
+  return Object.fromEntries(Object.entries(loadRateEntries(text)).map(([id, entry]) => [id, entry.rate]));
 }
