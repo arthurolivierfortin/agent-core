@@ -122,32 +122,49 @@ Intentions, not decisions: each one becomes real only if the harness shows it be
 
 ## Full tree (target map, V1 → V4)
 
-This map fixes where **each** class lands, all versions combined. The skeleton (`.gitkeep` folders) is laid down as of PR1; each PR then drops its code into it. `[V2]`/`[V3]`/`[V4]` = version of appearance; no tag = V1.
+This map fixes where **each** class lands, all versions combined. The skeleton (`.gitkeep` folders) is laid down as of PR1; each PR then drops its code into it. `[V2]`/`[V3]`/`[V4]` = version of appearance; no tag = V1. One path per line, two spaces per level: every `.ts` file of `src/` has its line, and every untagged line names a file or folder that exists in `src/`; a tagged line, or any line under a tagged folder, may name one that has not landed yet. `scripts/repo-conventions.test.mjs` checks both directions.
 
 ```
 src/
   index.ts                       "." entry point: engine + ports + types, NO fs
+  core/                          shared kernel: the vocabulary llm/ and tools/ both import (ADR-AGENT-0012)
+    models/index.ts              JSONSchemaType · JSONSchemaProperty · ToolSchema
+    index.ts                     barrel of the kernel, re-exported by llm/index.ts
   llm/
-    models/index.ts              Message · ToolCall · ToolResult · LLMResponse · Usage · LLMChunk · LLMError
+    models/index.ts              Message · ToolCall · ToolDefinition · Usage · LLMResponse · LLMChunk · ModelInfo · LLMError
     interfaces/llm-provider.ts
-    services/response-parser.ts        pure: provider JSON → LLMResponse
+    interfaces/index.ts          barrel of the port
+    services/token-count.ts      pure: isTokenCount, the usage-counter rule (served by no barrel)
     providers/
-      ollama/ollama-adapter.ts   OllamaLLMProvider
-      gemini/gemini-adapter.ts   GeminiLLMProvider           [V2]
-      azure/azure-adapter.ts     AzureLLMProvider            [V2]
+      ollama/ollama-llm-provider.ts   OllamaLLMProvider
+      gemini/gemini-llm-provider.ts   GeminiLLMProvider        [V2]
+      gemini/gemini-wire.ts      pure: generateContent translation, served by no barrel   [V2]
+      azure/azure-llm-provider.ts   AzureLLMProvider         [V2]
       index.ts                   PROVIDERS: Record<ProviderID, () => LLMProvider>
+    testing/                     shipped test tooling → exported by "./testing", never by "./llm"
+      fake-llm-provider.ts       FakeLLMProvider (2nd LLMProvider implementation)
+      provider-contract.ts       checkProviderContract (runner-agnostic conformance check)
+      index.ts                   barrel of the llm tooling, re-exported by testing/index.ts
+    index.ts                     barrel of the framework (with core/), re-exported by "."
   context/
     interfaces/context-strategy.ts
     interfaces/token-counter.ts
+    interfaces/index.ts          barrel of the ports
     strategies/                  they differ by algorithm, not by vendor (ADR-AGENT-0016)
-      sliding-window/…           SlidingWindowStrategy
+      sliding-window/sliding-window-strategy.ts   SlidingWindowStrategy
+      sliding-window/index.ts    barrel of the strategy
       memory/…                   MemoryStrategy              [V3]
     infrastructure/heuristic-token-counter.ts   HeuristicTokenCounter
+    infrastructure/index.ts      barrel of the adapters
+    index.ts                     barrel of the framework, re-exported by "."
   tools/
-    models/index.ts              ToolSchema
+    models/index.ts              ToolOutcome · ToolResult (ToolSchema lives in core/)
     interfaces/tool.ts
+    interfaces/index.ts          barrel of the port
     application/use-cases/dispatch-tool.ts   dispatchTool ("ToolDispatcher" box from the schema)
-    infrastructure/              ReadFile · WriteFile · ListFiles   → exported by "./tools"
+    application/use-cases/to-tool-definition.ts   toToolDefinition (Tool → ToolDefinition shown to the model)
+    infrastructure/index.ts      "./tools" entry point, empty for now: ReadFile · WriteFile · ListFiles land here
+    index.ts                     the pure half (port, dispatcher), re-exported by "."
   metrics/
     models/index.ts              UsageRecord · MetricsTotal · RateTable
     services/aggregate.ts        pure: records → MetricsTotal (with RateTable)
@@ -161,14 +178,23 @@ src/
       azure/…                    AzureVoiceProvider
   agent/
     models/agent-definition.ts   AgentDefinition
+    models/index.ts              barrel of the models
     services/define-agent.ts     defineAgent (pure)
-    services/step.ts             step(state, deps) (pure: one iteration)
     application/dtos/index.ts    AgentDeps · AgentInput · AgentResult · AgentState
+    application/use-cases/step.ts               step(state, deps) (one iteration: a function, but it calls ports)
     application/use-cases/agentic-llm.ts        AgenticLLM (class: public API)
     application/use-cases/voice-agentic-llm.ts  VoiceAgenticLLM (class)   [V4]
+    testing/                     the agent harness → exported by "./testing", never by "."
+      fake-app.ts                shared-state simulator (not a mock)
+      define-scenario.ts         defineScenario
+      run-scenario.ts            runScenario
+      run-matrix.ts              runMatrix
+      matrix-csv.ts              CSV views of a matrix report, served by no barrel
+      replay-run.ts              replayRun
+      index.ts                   barrel of the harness, re-exported by testing/index.ts
+    index.ts                     barrel of the framework, re-exported by "."
   testing/                        → exported by "./testing", never in prod
-    fake-llm-provider.ts         FakeLLMProvider (2nd LLMProvider implementation)
-    fake-app.ts · define-scenario.ts · run-scenario.ts · run-matrix.ts
+    index.ts                     aggregates llm/testing/ and agent/testing/
 ```
 
 **Same pattern in each framework**: `models/` (data) · `interfaces/` (ports, one `kebab-case.ts` per contract) · `services/` (pure functions) · `application/` (dtos + use-cases) · `providers/<vendor>/` and `infrastructure/` (I/O adapters). You learn one component, you know all six.

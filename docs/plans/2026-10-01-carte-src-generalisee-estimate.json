@@ -1,0 +1,22 @@
+{
+  "classe": "docs",
+  "nature": "mecanique",
+  "points": 2,
+  "nb_spec": 2,
+  "nb_db": 0,
+  "duree_estimee_s": 2310,
+  "tokens_estimes": 56000,
+  "intervalle_bas_s": 1617,
+  "intervalle_haut_s": 3465,
+  "recette_version": "v3",
+  "grille_version": "g1",
+  "echantillon": 0,
+  "modele_builder": "claude-opus-5-5",
+  "niveau_recette": "aucun",
+  "coefficient_recette": 1,
+  "n_recette": 0,
+  "detail": [
+    { "spec_id": "SPEC-1", "duree_s": 630, "motif": "SPEC avec test, durée v1 de la classe docs (15 min) x0,7 ; v3 x1, source hors_perimetre, n = 0" },
+    { "spec_id": "SPEC-2", "duree_s": 630, "motif": "SPEC avec test, durée v1 de la classe docs (15 min) x0,7 ; v3 x1, source hors_perimetre, n = 0" }
+  ]
+}
