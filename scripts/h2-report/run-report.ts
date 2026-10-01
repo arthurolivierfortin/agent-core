@@ -2,7 +2,7 @@
 // docs/specs/2026-09-30-h2-report-launch-design.md (#42, the real run). Spending goes only through the
 // providers of io.providers (or defaultProviders), the hosted one under one capGuard; never through fetch.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { GeminiLLMProvider, HeuristicTokenCounter, OllamaLLMProvider, SlidingWindowStrategy, defineAgent } from "../../dist/index.js";
 import type { LLMProvider, RateTable } from "../../dist/index.js";
 // The harness comes from the ./testing subpath, as a consumer imports it: `.` does not serve it (D1).
@@ -120,6 +120,16 @@ function announcement(args: ReportArgs, entries: Readonly<Record<string, RateEnt
   ].join("\n");
 }
 
+/** <repo> then <home>, each in its slash and its backslash spelling: the repo usually sits under home. */
+function scrubMachinePaths(text: string, repo: string, home: string): string {
+  for (const [root, label] of [[repo, "<repo>"], [home, "<home>"]]) {
+    // An empty root, or a filesystem root such as C:\ or /, would replace far too much.
+    if (root === "" || dirname(root) === root) continue;
+    text = text.replaceAll(root.replaceAll("\\", "/"), label).replaceAll(root.replaceAll("/", "\\"), label);
+  }
+  return text;
+}
+
 /**
  * The real run (D2): one factory call, one capGuard shared by every hosted run, the local provider unguarded
  * (its rate of 0 would cut the matrix, unpriced_model). Writes every text with flag 'wx'. Never throws: an
@@ -145,7 +155,9 @@ async function launch(io: ReportIO, args: ReportArgs, rates: RateTable): Promise
       rates,
       now: () => clock().getTime(),
     });
-    const files: Array<readonly [string, string]> = [[SUMMARY, report.toCSV()], [RUNS, report.toRunsCSV()]];
+    const texts: Array<readonly [string, string]> = [[SUMMARY, report.toCSV()], [RUNS, report.toRunsCSV()]];
+    // Before any check and any write: the texts as they will be written.
+    const files = texts.map(([name, text]) => [name, scrubMachinePaths(text, io.repo, io.home)] as const);
     const target = resolve(io.repo, args.out);
     mkdirSync(target, { recursive: true });
     for (const [name, text] of files) writeFileSync(join(target, name), text, { flag: "wx" });

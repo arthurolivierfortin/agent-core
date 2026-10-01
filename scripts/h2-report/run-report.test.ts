@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { GeminiLLMProvider, OllamaLLMProvider } from "../../dist/index.js";
 import type { LLMProvider, LLMResponse, Usage } from "../../dist/index.js";
 import * as runner from "./run-report.ts";
@@ -253,4 +253,15 @@ test("TEST-4 (issue 42) 'wx': a summary.csv created during the run is kept, EEXI
   assert.equal(result.code, 1);
   assert.match(result.stderr, /EEXIST/);
   assert.deepEqual(result.files, { "summary.csv": "held" });
+});
+
+test("TEST-5 (issue 42) machine paths become <repo> then <home>, in their slash and backslash spellings", async () => {
+  let repo = "";
+  const failing = (root: string) => scripted("local-x", LOCAL_USAGE, (call) => call === 1 ? new Error(
+    `cannot open ${root}/a and ${root.replaceAll("\\", "/")}/b and ${root.replaceAll("/", "\\")}\\c in ${dirname(root)}`) : undefined);
+  const providers = (root: string) => ({ local: failing((repo = root)), hosted: scripted("hosted-x", HOSTED_USAGE) });
+  const result = await launched(COMPLETE, { home: (root) => dirname(root), providers });
+  const runs = result.files?.["runs.csv"] ?? "";
+  assert.ok(runs.includes("cannot open <repo>/a and <repo>/b and <repo>\\c in <home>"), "runs.csv: machine paths not replaced");
+  for (const raw of [repo, repo.replaceAll("\\", "/"), dirname(repo)]) assert.ok(!runs.includes(raw), "runs.csv: a machine path remains");
 });
