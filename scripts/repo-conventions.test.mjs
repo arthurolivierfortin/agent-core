@@ -56,6 +56,57 @@ function sectionAfterHeading(text, heading) {
   return (end === -1 ? rest : rest.slice(0, end)).join("\n");
 }
 
+// Grammaire commune de la carte de ROADMAP.md et de l'arborescence du guide (#56), règles 1 à 6 de
+// docs/specs/2026-10-01-carte-src-generalisee-design.md, « Grammaire commune des deux arborescences ».
+function fencedBlockAfter(text, heading) {
+  const lines = splitLines(text);
+  const start = lines.indexOf(heading);
+  assert.notEqual(start, -1, `titre absent : ${heading}`);
+  const open = lines.findIndex((line, index) => index > start && line.startsWith("```"));
+  assert.notEqual(open, -1, `clôture ouvrante absente après le titre ${heading}`);
+  const close = lines.findIndex((line, index) => index > open && line.startsWith("```"));
+  assert.notEqual(close, -1, `clôture fermante absente après le titre ${heading}`);
+  return lines.slice(open + 1, close);
+}
+
+// Marque de version d'une ligne d'arborescence : elle peut nommer un chemin pas encore livré.
+const TREE_TAG = /\[V[234]\]/;
+
+function parseSrcTree(blockLines) {
+  const lines = blockLines.filter((line) => line.trim() !== "");
+  assert.equal(lines[0], "src/", "arborescence : la première ligne non vide n'est pas src/");
+  const invalid = [];
+  const entries = [];
+  const stack = [];
+  for (const line of lines.slice(1)) {
+    const indent = /^ */.exec(line)[0].length;
+    const depth = indent / 2;
+    if (indent < 2 || indent % 2 !== 0 || stack.length < depth - 1) {
+      invalid.push(line);
+      continue;
+    }
+    stack.length = depth - 1;
+    const name = line.trim().split(/\s+/)[0];
+    const kind = name.endsWith("/") ? "dir" : name.endsWith(".ts") ? "file" : "elided";
+    const tagged = TREE_TAG.test(line) || stack.some((dir) => dir.tagged);
+    if (kind === "elided" && !tagged) {
+      invalid.push(line);
+      continue;
+    }
+    const path = stack.map((dir) => dir.name).join("") + name;
+    entries.push({ line, path, kind, tagged });
+    if (kind === "dir") stack.push({ name, tagged });
+  }
+  return { invalid, entries };
+}
+
+function srcTsFiles() {
+  return readdirSync(new URL("../src/", import.meta.url), { recursive: true })
+    .map((name) => name.replaceAll("\\", "/"))
+    .filter((name) => name.endsWith(".ts"))
+    .sort();
+}
+
 test("TEST-1 .gitignore versionne docs/specs et docs/plans", () => {
   const gitignore = splitLines(readRepoFile(".gitignore"));
   assert.ok(!gitignore.includes("/docs/specs"), ".gitignore ignore encore /docs/specs");
@@ -289,25 +340,29 @@ test("TEST-4 (issue 7) ROADMAP place withMetrics sous metrics/application/use-ca
   );
 });
 
-test("TEST-1 (issue 23) ROADMAP : la carte de metrics/ liste exactement les fichiers .ts de src/metrics/", () => {
-  const lines = splitLines(readRepoFile("ROADMAP.md"));
-  const metrics = lines.indexOf("  metrics/");
-  const voice = lines.findIndex((line, index) => index > metrics && line.startsWith("  voice/"));
-  assert.ok(metrics !== -1 && voice !== -1, "ROADMAP.md : sous-arbres metrics/ puis voice/ introuvables");
-  const entries = lines.slice(metrics + 1, voice).map((line) => ({ line, path: line.trim().split(/\s+/)[0] }));
-  for (const { line, path } of entries) {
-    assert.ok(path.endsWith(".ts"), `ROADMAP.md : ligne du sous-arbre metrics/ sans chemin .ts en tête : « ${line} »`);
-  }
-  const files = readdirSync(new URL("../src/metrics/", import.meta.url), { recursive: true })
-    .map((name) => name.replaceAll("\\", "/"))
-    .filter((name) => name.endsWith(".ts"));
+test("TEST-1 (issue 56) ROADMAP : la carte nomme chaque fichier .ts de src/ et seulement des chemins existants hors lignes [Vn]", () => {
+  const { invalid, entries } = parseSrcTree(fencedBlockAfter(readRepoFile("ROADMAP.md"), "## Full tree (target map, V1 → V4)"));
+  assert.deepEqual(invalid, [], "ROADMAP.md : lignes de la carte invalides");
   assert.deepEqual(
-    entries.map(({ path }) => path).sort(),
-    files.sort(),
-    "ROADMAP.md : la carte de metrics/ diffère des fichiers .ts de src/metrics/ (une ligne [Vn] future devra être exclue de la comparaison)",
+    entries
+      .filter(({ path, kind, tagged }) => !tagged && kind !== "elided" && !existsSync(new URL("../src/" + path, import.meta.url)))
+      .map(({ path }) => path),
+    [],
+    "ROADMAP.md : la carte nomme des chemins absents de src/",
   );
-  const collector = entries.find(({ path }) => path === "application/use-cases/metrics-collector.ts");
-  assert.ok(collector?.line.includes("MetricsCollector"), "ROADMAP.md : ligne application/use-cases/metrics-collector.ts sans MetricsCollector");
+  const named = entries.filter(({ kind }) => kind === "file").map(({ path }) => path);
+  assert.deepEqual(
+    srcTsFiles().filter((file) => !named.includes(file)),
+    [],
+    "ROADMAP.md : fichiers .ts de src/ absents de la carte",
+  );
+  assert.deepEqual(
+    named.filter((path, index) => named.indexOf(path) !== index),
+    [],
+    "ROADMAP.md : chemin nommé deux fois dans la carte",
+  );
+  const collector = entries.find(({ path }) => path === "metrics/application/use-cases/metrics-collector.ts");
+  assert.ok(collector?.line.includes("MetricsCollector"), "ROADMAP.md : ligne metrics/application/use-cases/metrics-collector.ts sans MetricsCollector");
 });
 
 // Délai du fils de TEST-3 (issue 26), qui dure environ 0,3 s : un fils bloqué fait échouer
