@@ -15,8 +15,25 @@ Spécification : docs/specs/2026-10-01-carte-src-generalisee-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
+
+- [H] R-1 (spécification) · Points d'entrée : « The 3 entry points » (`ROADMAP.md:178` avant ce plan) et « Three public entry points » (guide l.60-66) omettent `./llm`, exporté par `package.json:13-16`. Hors des sous-arbres visés par l'issue ; issue de suivi si le pilote le veut.
+- [H] R-2 (spécification) · Contexte de projet hérité du guide (l.9-13, l.50 : NATHAN, `PMC/`) : couvert par la dérogation et la note d'origine, non touché.
+- [H] R-3 (spécification) · Lignes marquées non vérifiées (D3) : un nom faux sur une ligne `[Vn]` passe tant qu'aucun fichier n'arrive ; quand le fichier réel arrive sous un autre nom, le sens `src/` → carte le nomme.
+- [H] R-4 (spécification) · Descriptions non vérifiées : seul le premier mot de chaque ligne est comparé à l'arbre (sauf `MetricsCollector`, verrou repris de #23).
+- [H] P1 · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de SPEC-1 (spécification ; précédent P1 de #20, #31, #35, #46, #23).
+- [H] P2 · Les commandes ciblées ajoutent `--test-reporter=tap` à `node --test scripts/repo-conventions.test.mjs` de la checklist, pour que la forme de la sortie soit celle du plan quel que soit le terminal ; le fichier et les tests exécutés sont les mêmes.
+- [H] P3 · Sorties observées par le planificateur sur une sonde (`git archive` de 419617a, `dist/` du worktree copié), et la référence dans le worktree par `node --test` sans build ; `npm ci` non lancé (`node_modules/` déjà présent). Un écart de totaux à la tâche 0 se traite comme dit dans « Totaux attendus » (aucun écart constaté : B = 407).
+- [H] P4 · Un troisième commit, `docs(checklist): cocher les gates et consigner les hypothèses`, coche les gates après GATE-3 (précédent de #23).
+- [H] P5 · Forme des aides : une constante de module `TREE_TAG` (`/\[V[234]\]/`) en plus des trois aides nommées par la checklist ; le filtre des chemins absents est écrit dans chacun des deux tests plutôt que dans une quatrième aide. Une ligne invalide n'entre pas dans `entries` et ne modifie pas la pile. Réversible.
+- [H] P6 · Pas de `npm run build` pendant les mutations : un build pendant 1.C ou 2.B émettrait `dist/core/probe.*` ou `dist/probe/`, que la suppression de la source ne retire pas.
+- [H] P7 · `GUIDE_TREE_SENTENCE` en quatre littéraux (96, 100, 100, 24 colonnes) et non deux comme `HTTP_STATUS_SENTENCE` : la phrase fait 297 caractères, trois lignes de 100 colonnes ne la contiennent pas.
+- [H] P8 · Taille : +105 −16 mesurées hors `docs/` et `*.md` (121 lignes), dans la fourchette 90 à 140 de la spécification, sous le seuil de 400.
+- [H] P9 · Fins de ligne : les trois fichiers touchés sont en CRLF dans la copie de travail, stockés en LF ; les éditions se font par l'outil Edit, qui garde la fin de ligne du fichier.
+- [H] P10 · `origin/main` a avancé à 429bcfb (#61) après la base 419617a du plan ; #61 ne touche aucun fichier de ce plan. Le pilote a avancé la branche en fast-forward sur 429bcfb avant l'implémentation : ni rebase ni merge par le builder ; la référence de la suite y vaut 407 tests, comme sur 419617a.
+- [H] P11 · Rouge de TEST-2 : l'assertion qui échoue est celle des chemins absents ; celle des dossiers non montrés (`core/`, `core/models/`, `metrics/application/use-cases/`) n'est pas atteinte sur le guide de `main` (déduit, non observé) ; elle est exercée par la mutation 2.B.
+- [H] Node · Node local ≥ 22.18 (retrait de types sans drapeau ; `readdirSync` récursif depuis Node 20.1), constaté v22.19.0 par le planificateur.
