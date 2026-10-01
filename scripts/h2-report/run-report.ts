@@ -5,6 +5,7 @@ import { join, relative, resolve } from "node:path";
 import { GeminiLLMProvider, OllamaLLMProvider } from "../../dist/index.js";
 import type { LLMProvider } from "../../dist/index.js";
 import { loadRateEntries, loadRateFile } from "./rates.ts";
+import type { RateEntry } from "./rates.ts";
 import { parseReportArgs } from "./report-args.ts";
 import type { ReportArgs } from "./report-args.ts";
 import { assertReadyToStart } from "./start-guard.ts";
@@ -36,6 +37,12 @@ export type ReportIO = {
 /** The files #42 writes into --out with flag 'wx': a complete report, or a truncated one and its mark (P-3, P-6). */
 export const REPORT_FILES = ["summary.csv", "runs.csv", "summary.truncated.csv", "runs.truncated.csv", "TRUNCATED.txt"] as const;
 
+/** budget.maxIterations of every run, set by #42 (P-4); a run makes at most one call more, to land (step.ts). */
+export const REPORT_MAX_ITERATIONS = 10;
+
+// The H1 scenario #42 runs; #33 only names it.
+const SCENARIO = "aller aux reglages";
+
 /**
  * Default provider factory for #42, never called by #33 (P-5). The models come from `args`, never from PROVIDERS:
  * OLLAMA_MODEL and GEMINI_MODEL change nothing; OLLAMA_HOST stays honoured (R-2). Building calls no network.
@@ -64,24 +71,53 @@ function assertOutFree(out: string, repo: string): void {
   }
 }
 
+function rateText(entry: RateEntry): string {
+  if (entry.rate === null) return "rate null";
+  return `rate ${entry.rate.usdPerMillionTokensIn} USD in, ${entry.rate.usdPerMillionTokensOut} USD out per million tokens`;
+}
+
+/** The announcement, a line each, ended by a newline; the rates' presence is checked by assertReadyToStart. */
+function announcement(args: ReportArgs, entries: Readonly<Record<string, RateEntry>>): string {
+  const perRun = REPORT_MAX_ITERATIONS + 1;
+  const model = (label: string, id: string): string => {
+    const entry = entries[id];
+    return `${label} model: ${id}; ${rateText(entry)}; effective ${entry.effectiveFrom}; source ${entry.source}`;
+  };
+  return [
+    "H2 report: announcement, before any network call",
+    `scenario: ${SCENARIO}`,
+    `runs per model (N): ${args.runs}`,
+    model("local", args.ollamaModel),
+    model("hosted", args.geminiModel),
+    `max calls: ${2 * args.runs * perRun}, of which ${args.runs * perRun} hosted` +
+      ` (at most ${perRun} per run: maxIterations ${REPORT_MAX_ITERATIONS} plus the landing call)`,
+    `cap: ${args.capUsd} USD on the hosted model`,
+    `out: ${args.out}`,
+    "",
+  ].join("\n");
+}
+
 /**
  * Checks the arguments, the two models, the rate text, the start guard and --out, in this order; never
- * throws. The first defect goes to stderr and returns 1, nothing on stdout. All checks passed, it returns
- * 1 too: nothing is launched. The provider factory is never called.
+ * throws. The first defect goes to stderr and returns 1, nothing on stdout. Then the announcement goes
+ * to stdout in one write, and it returns 1: nothing is launched. The provider factory is never called.
  */
 export async function runReport(io: ReportIO): Promise<number> {
+  let args: ReportArgs;
+  let entries: Readonly<Record<string, RateEntry>>;
   try {
-    const args = parseReportArgs(io.argv, io.today);
+    args = parseReportArgs(io.argv, io.today);
     if (args.ollamaModel === args.geminiModel) {
       throw new Error(`--ollama-model and --gemini-model must differ, got '${args.ollamaModel}' for both`);
     }
     // loadRateEntries throws first, with the message loadRateFile would throw on the same defect.
-    loadRateEntries(io.ratesText);
+    entries = loadRateEntries(io.ratesText);
     assertReadyToStart(args, loadRateFile(io.ratesText), io.env);
     assertOutFree(args.out, io.repo);
   } catch (error) {
     io.stderr.write(`${messageOf(error)}\n`);
     return 1;
   }
+  io.stdout.write(announcement(args, entries));
   return 1;
 }

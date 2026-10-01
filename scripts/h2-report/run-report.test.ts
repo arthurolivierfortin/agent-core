@@ -122,3 +122,28 @@ test("TEST-4 (issue 33) docs/demonstration/ and the default --out raise no --out
     assert.equal(result.factoryCalls, 0);
   }
 });
+
+const ANNOUNCED = ["--cap-usd", "2.5", "--runs", "3", ...MODELS, "--out", "docs/reports/h2-test/"];
+const ANNOUNCEMENT = [
+  "H2 report: announcement, before any network call",
+  "scenario: aller aux reglages",
+  "runs per model (N): 3",
+  "local model: local-x; rate 0 USD in, 0 USD out per million tokens; effective 2026-09-30; source local",
+  "hosted model: hosted-x; rate 0.3 USD in, 2.5 USD out per million tokens; effective 2026-10-01; source https://example.test/pricing",
+  "max calls: 66, of which 33 hosted (at most 11 per run: maxIterations 10 plus the landing call)",
+  "cap: 2.5 USD on the hosted model",
+  "out: docs/reports/h2-test/",
+  "",
+].join("\n");
+
+test("TEST-5 (issue 33) stdout opens with the exact announcement, rates dated and sourced", async () => {
+  const result = await report([...ANNOUNCED, "--dry-run"]);
+  assert.equal(result.stdout.slice(0, ANNOUNCEMENT.length), ANNOUNCEMENT);
+  assert.equal(runner.REPORT_MAX_ITERATIONS, 10);
+});
+
+test("TEST-5 (issue 33) a local rate that is null is announced as rate null", async () => {
+  const result = await report([...ANNOUNCED, "--dry-run"], { ratesText: ratesText(null) });
+  const line = "local model: local-x; rate null; effective 2026-09-30; source local";
+  assert.ok(result.stdout.split("\n").includes(line), result.stdout);
+});
