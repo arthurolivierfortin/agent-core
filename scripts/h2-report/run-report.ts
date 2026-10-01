@@ -9,6 +9,7 @@ import type { LLMProvider, RateTable } from "../../dist/index.js";
 import { defineScenario, fakeApp, runMatrix } from "../../dist/testing/index.js";
 import type { FakeAppState } from "../../dist/testing/index.js";
 import { capGuard } from "./cap-guard.ts";
+import type { CapGuard } from "./cap-guard.ts";
 import { loadRateEntries, loadRateFile } from "./rates.ts";
 import type { RateEntry } from "./rates.ts";
 import { parseReportArgs } from "./report-args.ts";
@@ -43,7 +44,7 @@ export type ReportIO = {
 
 /** The files the real run writes into --out with flag 'wx': a complete report, or a truncated one and its mark. */
 export const REPORT_FILES = ["summary.csv", "runs.csv", "summary.truncated.csv", "runs.truncated.csv", "TRUNCATED.txt"] as const;
-const [SUMMARY, RUNS] = REPORT_FILES;
+const [SUMMARY, RUNS, SUMMARY_TRUNCATED, RUNS_TRUNCATED, MARK] = REPORT_FILES;
 
 /** budget.maxIterations of every run, set by #42 (P-4); a run makes at most one call more, to land (step.ts). */
 export const REPORT_MAX_ITERATIONS = 10;
@@ -130,6 +131,29 @@ function scrubMachinePaths(text: string, repo: string, home: string): string {
   return text;
 }
 
+/** Null for a complete report; else why it is truncated. Reaching the cap is not a cut (cap-guard.ts). */
+function truncationCause(guard: CapGuard, capUsd: number): string | null {
+  const cut = guard.cutReason();
+  // network means an LLMError without status (R-1 of #35): say so rather than guess.
+  if (cut === "network") return "cut: network, no HTTP status reported";
+  if (cut !== null) return `cut: ${cut}`;
+  return guard.spentUsd() >= capUsd && guard.refused() > 0 ? "cap reached" : null;
+}
+
+/** The text of TRUNCATED.txt, a line each, numbers by String(n). */
+function truncationMark(cause: string, guard: CapGuard, args: ReportArgs, at: Date): string {
+  return [
+    "H2 report TRUNCATED",
+    `cause: ${cause}`,
+    `spent: ${guard.spentUsd()} USD`,
+    `cap: ${args.capUsd} USD`,
+    `refused calls: ${guard.refused()}`,
+    `at: ${at.toISOString()}`,
+    `models: ${args.ollamaModel} (local), ${args.geminiModel} (hosted)`,
+    "",
+  ].join("\n");
+}
+
 /**
  * The real run (D2): one factory call, one capGuard shared by every hosted run, the local provider unguarded
  * (its rate of 0 would cut the matrix, unpriced_model). Writes every text with flag 'wx'. Never throws: an
@@ -155,14 +179,22 @@ async function launch(io: ReportIO, args: ReportArgs, rates: RateTable): Promise
       rates,
       now: () => clock().getTime(),
     });
-    const texts: Array<readonly [string, string]> = [[SUMMARY, report.toCSV()], [RUNS, report.toRunsCSV()]];
+    const cause = truncationCause(guard, args.capUsd);
+    const texts: Array<readonly [string, string]> = cause === null
+      ? [[SUMMARY, report.toCSV()], [RUNS, report.toRunsCSV()]]
+      : [[SUMMARY_TRUNCATED, report.toCSV()], [RUNS_TRUNCATED, report.toRunsCSV()], [MARK, truncationMark(cause, guard, args, clock())]];
     // Before any check and any write: the texts as they will be written.
     const files = texts.map(([name, text]) => [name, scrubMachinePaths(text, io.repo, io.home)] as const);
     const target = resolve(io.repo, args.out);
     mkdirSync(target, { recursive: true });
     for (const [name, text] of files) writeFileSync(join(target, name), text, { flag: "wx" });
-    io.stdout.write(`H2 report written: ${SUMMARY}, ${RUNS} in ${args.out}\n`);
-    return 0;
+    if (cause === null) {
+      io.stdout.write(`H2 report written: ${SUMMARY}, ${RUNS} in ${args.out}\n`);
+      return 0;
+    }
+    const spent = `spent ${guard.spentUsd()} USD, cap ${args.capUsd} USD, ${guard.refused()} calls refused`;
+    io.stderr.write(`H2 report TRUNCATED (${cause}): ${spent}; see ${MARK} in ${args.out}\n`);
+    return 1;
   } catch (error) {
     io.stderr.write(`${messageOf(error)}\n`);
     return 1;

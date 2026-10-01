@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { GeminiLLMProvider, OllamaLLMProvider } from "../../dist/index.js";
+import { GeminiLLMProvider, LLMError, OllamaLLMProvider } from "../../dist/index.js";
 import type { LLMProvider, LLMResponse, Usage } from "../../dist/index.js";
 import * as runner from "./run-report.ts";
 
@@ -265,3 +265,36 @@ test("TEST-5 (issue 42) machine paths become <repo> then <home>, in their slash 
   assert.ok(runs.includes("cannot open <repo>/a and <repo>/b and <repo>\\c in <home>"), "runs.csv: machine paths not replaced");
   for (const raw of [repo, repo.replaceAll("\\", "/"), dirname(repo)]) assert.ok(!runs.includes(raw), "runs.csv: a machine path remains");
 });
+
+const SHORT = [...BASE, "--runs", "2", "--out", "out/"];
+/** The doubles, the hosted one throwing `error` on its first call. */
+const cutAt1 = (error: Error) => doubles(undefined, scripted("hosted-x", HOSTED_USAGE, (call) => (call === 1 ? error : undefined)));
+/** TRUNCATED.txt as SPEC-6 writes it: one refused call, at NOW. */
+const markText = (cause: string, spent: number, cap: number) => [
+  "H2 report TRUNCATED", `cause: ${cause}`, `spent: ${spent} USD`, `cap: ${cap} USD`, "refused calls: 1",
+  "at: 2026-09-30T12:00:00.000Z", "models: local-x (local), hosted-x (hosted)", "",
+].join("\n");
+
+// The cap: 1 USD per hosted run, so the third call of the third run is refused, at 2.5 USD of 2.5.
+const TRUNCATIONS: ReadonlyArray<readonly [string, readonly string[], Overrides, number, number]> = [
+  ["cap reached", ANNOUNCED, { providers: doubles() }, 2.5, 2.5],
+  ["cut: http_503", SHORT, { providers: cutAt1(new LLMError("API_ERROR", "unavailable", { status: 503 })) }, 0, 1],
+  ["cut: network, no HTTP status reported", SHORT, { providers: cutAt1(new LLMError("API_ERROR", "fetch failed")) }, 0, 1],
+];
+
+for (const [cause, argv, overrides, spent, cap] of TRUNCATIONS) {
+  test(`TEST-6 (issue 42) ${cause}: the three truncated files, their mark, the stderr line, code 1`, async () => {
+    const result = await launched(argv, overrides);
+    const out = argv[argv.indexOf("--out") + 1];
+    assert.equal(result.code, 1);
+    assert.ok(result.stdout.startsWith("H2 report: announcement, before any network call\n"), result.stdout);
+    assert.ok(!result.stdout.includes("H2 report written"), result.stdout);
+    assert.deepEqual(Object.keys(result.files ?? {}).sort(), ["TRUNCATED.txt", "runs.truncated.csv", "summary.truncated.csv"]);
+    assert.equal(result.files?.["TRUNCATED.txt"], markText(cause, spent, cap));
+    assert.equal(result.stderr, `H2 report TRUNCATED (${cause}): spent ${spent} USD, cap ${cap} USD, 1 calls refused; see TRUNCATED.txt in ${out}\n`);
+    if (cause !== "cap reached") return;
+    // A guard per run would stop each hosted run at 1 USD and never refuse: this locks the single guard.
+    assert.equal(result.stdout, ANNOUNCEMENT);
+    assert.ok(result.files?.["runs.truncated.csv"].includes("capGuard refused a call to 'hosted-x': 2.5 USD spent reached the cap of 2.5 USD"));
+  });
+}
