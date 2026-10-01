@@ -308,6 +308,12 @@ for (const [cause, argv, overrides, spent, cap] of TRUNCATIONS) {
   });
 }
 
+test("TEST-6 (issue 42) the cap reached by the last call, none refused: the complete report, code 0", async () => {
+  const result = await launched(["--cap-usd", "2", ...COMPLETE.slice(2)], { providers: doubles() });
+  assert.deepEqual([result.code, result.stderr, Object.keys(result.files ?? {}).sort()], [0, "", ["runs.csv", "summary.csv"]]);
+  assert.ok(result.files?.["summary.csv"].endsWith("hosted-x,2,2,1,0,800000,2\r\n"), "2 USD spent, the cap of 2 USD");
+});
+
 // hosted-x stands for the key: it is the hosted model's name, so every CSV holds it.
 const LEAKS: ReadonlyArray<readonly [string, readonly string[], Overrides, string]> = [
   ["a key trimmed", COMPLETE, { env: { GEMINI_API_KEY: "  hosted-x  " }, providers: doubles() }, "summary.csv, runs.csv"],
