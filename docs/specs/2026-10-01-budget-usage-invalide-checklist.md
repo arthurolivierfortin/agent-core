@@ -16,9 +16,22 @@ Spécification : docs/specs/2026-10-01-budget-usage-invalide-design.md
 (aucune)
 
 ## Vérifications
-- [ ] [GATE-1] build — `npm run build`
-- [ ] [GATE-2] typecheck — `npm run typecheck`
-- [ ] [GATE-3] test — `npm run test`
+- [x] [GATE-1] build — `npm run build`
+- [x] [GATE-2] typecheck — `npm run typecheck`
+- [x] [GATE-3] test — `npm run test`
 
 ## Hypothèses
-(aucune à la rédaction)
+- [H] R-1 (spécification) · Fournisseur tiers ou scripté : `tokensOf` (`src/agent/application/use-cases/step.ts:276-279`) additionne toujours sans contrôle l'usage d'un `LLMProvider` écrit par un consommateur ou d'un `FakeLLMProvider` scripté ; un `NaN` ou un négatif y garde l'effet décrit par l'issue. Hors périmètre par l'attendu (D3) ; à rouvrir en issue si le pilote veut un budget qui refuse lui-même un usage invalide.
+- [H] R-2 (spécification) · Trois copies de la règle (D2) : `src/llm/providers/token-count.ts` (#51), `src/metrics/application/use-cases/with-metrics.ts:54-57` (#46), `scripts/h2-report/cap-guard.ts:39-42` (#41), identiques mot pour mot et verrouillées chacune par ses tests ; un changement de la règle devra toucher les trois fichiers.
+- [H] P1 · Les documents de l'issue (spécification, checklist, estimation, plan) entrent dans le commit de SPEC-1 (spécification ; précédent P1 de #20, #35, #39, #41, #46).
+- [H] P2 · TSDoc d'`isTokenCount` replié sur trois lignes de 100 colonnes au plus au lieu d'une ligne de 121 colonnes ; mots identiques à la spécification.
+- [H] P3 · TSDoc de `toUsage` de Gemini replié sous 100 colonnes, mots identiques à la spécification ; une ligne de commentaire ajoutée avant la somme (« Two valid counters may still sum past Number.MAX_VALUE, to Infinity. ») pour dire pourquoi la somme est contrôlée (D4) ; logique identique.
+- [H] P4 · TSDoc de `Usage` : la phrase exigée commence une ligne et se replie sur la suivante pour tenir sous 100 colonnes ; le contrôle 2.4.10 la retrouve après jointure des lignes.
+- [H] P5 · Tests : libellés des lignes de table et titres choisis par le plan, en anglais comme leurs voisins, préfixés `TEST-N (issue 51)`, sans `#` ; assistants de fichier `countedBody` (TEST-2 : corps de la spécification bâti par concaténation, texte identique), `NEGATIVE_COUNT_NDJSON` (le flux de la spécification), `ollamaChatBody` et `ollamaNavigateCall` (TEST-3 : les trois corps de la spécification), table `INVALID_FIRST_COUNTS` (TEST-3, un `test()` par ligne) ; `scriptedOllamaFetch` rend `{ fetch, calls }` pour compter les appels.
+- [H] P6 · `docs/guide-agent-package.md` (arborescence l.70-87) n'est pas mis à jour pour `token-count.ts` : la spécification le met hors périmètre ; le module est interne et l'arbre liste déjà un fichier absent (`services/response-parser.ts`), il n'est donc pas exhaustif ; aucun test de convention ne le compare à `src/llm/` (seule la carte de `metrics/` dans `ROADMAP.md` l'est, `scripts/repo-conventions.test.mjs:292`).
+- [H] P7 · Taille : +180 −12 mesurées hors `docs/` et `*.md` (192 lignes) contre environ 180 estimées (fourchette 140 à 240), sous le seuil de 400, aucune dérogation.
+- [H] P8 · Sorties observées par le planificateur sur une sonde (`git archive` de 27bd9a1, compilée par le `tsc` du `node_modules/` du worktree, supprimée ensuite), pas sur le worktree lui-même ; le builder les a retrouvées à l'identique sur le worktree (référence 389, rouges 8 et 8, verts 398 et 407, mutations 3 et 1).
+- [H] P9 · La mutation `value > 0` fait échouer trois tests, dont « hypothesis H4 » (sa ligne `{ 0, 0 }`) : la règle « zéro compris » est verrouillée côté Gemini deux fois et côté Ollama une fois. Les copies de `withMetrics` et de `capGuard` ne sont pas touchées par cette mutation.
+- [H] P10 · Issue relue par le planificateur (`gh issue view 51`) : le corps correspond au résumé de la spécification ; R-3 de la spécification (« résumé de l'issue ») est levée. Le titre de l'issue porte `fix(agent)`, la PR `fix(llm)` (D7).
+- [H] P11 · Type et scope `fix(llm)` (D7) ; correction de comportement sans changement de signature, relève d'un correctif (patch) ; `package.json` (version) n'est pas touché.
+- [H] Node · Node local ≥ 22.18 (retrait de types sans drapeau), constaté v22.19.0.
