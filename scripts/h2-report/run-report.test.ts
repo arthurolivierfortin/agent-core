@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GeminiLLMProvider, OllamaLLMProvider } from "../../dist/index.js";
@@ -85,3 +85,40 @@ for (const [label, argv, overrides, expected] of REFUSALS) {
     assert.ok(!result.stderr.includes(KEY), result.stderr);
   });
 }
+
+const demoRefusal = (out: string) =>
+  `--out must not be under docs/demo/ (the H1 proof there is compared byte for byte), got '${out}'\n`;
+const heldRefusal = (names: string) => `--out already holds ${names}; choose another --out or move them away\n`;
+/** A setup that drops an empty file per name into <repo>/out/. */
+const holding = (...names: string[]) => (repo: string) => {
+  mkdirSync(join(repo, "out"));
+  for (const name of names) writeFileSync(join(repo, "out", name), "");
+};
+
+test("TEST-4 (issue 33) refuses an --out under docs/demo, whatever its case or its form", async () => {
+  for (const out of ["docs/demo", "docs/demo/h1-matrix/", "Docs/DEMO/x", "./docs/../docs/demo"]) {
+    const result = await report([...BASE, "--out", out]);
+    assert.deepEqual(result, { code: 1, stdout: "", stderr: demoRefusal(out), factoryCalls: 0 });
+  }
+  let absolute = "";
+  const result = await report((repo) => [...BASE, "--out", (absolute = join(repo, "docs", "demo"))]);
+  assert.deepEqual(result, { code: 1, stdout: "", stderr: demoRefusal(absolute), factoryCalls: 0 });
+});
+
+test("TEST-4 (issue 33) refuses an --out that already holds a file the report writes", async () => {
+  assert.deepEqual(runner.REPORT_FILES, ["summary.csv", "runs.csv", "summary.truncated.csv", "runs.truncated.csv", "TRUNCATED.txt"]);
+  for (const name of runner.REPORT_FILES) {
+    const result = await report([...BASE, "--out", "out/"], { setup: holding(name) });
+    assert.deepEqual(result, { code: 1, stdout: "", stderr: heldRefusal(name), factoryCalls: 0 });
+  }
+  const both = await report([...BASE, "--out", "out/"], { setup: holding("TRUNCATED.txt", "summary.csv") });
+  assert.deepEqual(both, { code: 1, stdout: "", stderr: heldRefusal("summary.csv, TRUNCATED.txt"), factoryCalls: 0 });
+});
+
+test("TEST-4 (issue 33) docs/demonstration/ and the default --out raise no --out refusal", async () => {
+  for (const argv of [[...BASE, "--out", "docs/demonstration/", "--dry-run"], [...BASE, "--dry-run"]]) {
+    const result = await report(argv);
+    assert.ok(!result.stderr.includes("--out"), result.stderr);
+    assert.equal(result.factoryCalls, 0);
+  }
+});

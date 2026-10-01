@@ -1,5 +1,7 @@
 // Runner of the H2 report (#33, C2a): docs/specs/2026-09-30-h2-report-runner-design.md.
 // Nothing here can spend: no provider is built and no network is called, whatever the path (P-5).
+import { existsSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { GeminiLLMProvider, OllamaLLMProvider } from "../../dist/index.js";
 import type { LLMProvider } from "../../dist/index.js";
 import { loadRateEntries, loadRateFile } from "./rates.ts";
@@ -31,6 +33,9 @@ export type ReportIO = {
   readonly providers?: (args: ReportArgs) => ReportProviders;
 };
 
+/** The files #42 writes into --out with flag 'wx': a complete report, or a truncated one and its mark (P-3, P-6). */
+export const REPORT_FILES = ["summary.csv", "runs.csv", "summary.truncated.csv", "runs.truncated.csv", "TRUNCATED.txt"] as const;
+
 /**
  * Default provider factory for #42, never called by #33 (P-5). The models come from `args`, never from PROVIDERS:
  * OLLAMA_MODEL and GEMINI_MODEL change nothing; OLLAMA_HOST stays honoured (R-2). Building calls no network.
@@ -46,10 +51,23 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Refuses --out under docs/demo/, any case (P-2), then one holding a REPORT_FILES name (P-3); only reads. */
+function assertOutFree(out: string, repo: string): void {
+  const target = resolve(repo, out);
+  const segments = relative(repo, target).split(/[\\/]/);
+  if (segments[0]?.toLowerCase() === "docs" && segments[1]?.toLowerCase() === "demo") {
+    throw new Error(`--out must not be under docs/demo/ (the H1 proof there is compared byte for byte), got '${out}'`);
+  }
+  const taken = REPORT_FILES.filter((name) => existsSync(join(target, name)));
+  if (taken.length > 0) {
+    throw new Error(`--out already holds ${taken.join(", ")}; choose another --out or move them away`);
+  }
+}
+
 /**
- * Checks the arguments, the two models, the rate text and the start guard, in this order; never throws.
- * The first defect goes to stderr and returns 1, nothing on stdout. All checks passed, it returns 1 too:
- * nothing is launched. The provider factory is never called.
+ * Checks the arguments, the two models, the rate text, the start guard and --out, in this order; never
+ * throws. The first defect goes to stderr and returns 1, nothing on stdout. All checks passed, it returns
+ * 1 too: nothing is launched. The provider factory is never called.
  */
 export async function runReport(io: ReportIO): Promise<number> {
   try {
@@ -60,6 +78,7 @@ export async function runReport(io: ReportIO): Promise<number> {
     // loadRateEntries throws first, with the message loadRateFile would throw on the same defect.
     loadRateEntries(io.ratesText);
     assertReadyToStart(args, loadRateFile(io.ratesText), io.env);
+    assertOutFree(args.out, io.repo);
   } catch (error) {
     io.stderr.write(`${messageOf(error)}\n`);
     return 1;
